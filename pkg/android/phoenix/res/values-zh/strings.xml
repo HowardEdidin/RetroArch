@@ -2,4 +2,5 @@
 <resources>
     <string name="exit_game">退出游戏</string>
     <string name="game_menu">菜单</string>
+    <string name="core_can_read">无法读取核心</string>
 </resources>

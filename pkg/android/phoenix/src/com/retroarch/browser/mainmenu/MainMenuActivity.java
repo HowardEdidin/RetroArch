@@ -22,6 +22,15 @@ import android.Manifest;
 import android.content.DialogInterface;
 import android.app.AlertDialog;
 import android.util.Log;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import android.widget.Toast;
+
+import com.retroarch.R;
 
 /**
  * {@link PreferenceActivity} subclass that provides all of the
@@ -134,6 +143,7 @@ public final class MainMenuActivity extends PreferenceActivity
 
 		Bundle data = getIntent().getExtras();
 		if (data != null) {
+			checkCorePermission(data);
 			retro.putExtras(data);
 		} else {
 			startRetroActivity(
@@ -147,6 +157,63 @@ public final class MainMenuActivity extends PreferenceActivity
 		}
 		startActivity(retro);
 		finish();
+	}
+
+	private void checkCorePermission(Bundle data) {
+		String corePath = data.getString("LIBRETRO");
+
+		if (corePath != null) {
+			String coreName = corePath.substring(corePath.lastIndexOf('/') + 1);
+
+			if (coreName == null) {
+				return;
+			}
+
+			String destPath = getApplicationInfo().dataDir + "/cores/" + coreName;
+			File coreFile = new File(corePath);
+			File destFile = new File(destPath);
+
+			if (!coreFile.canExecute() && coreFile.canRead()) {
+				data.putString("LIBRETRO", destPath);
+
+				if (!destFile.exists()) {
+					destFile.getParentFile().mkdirs();
+					copy(coreFile, destFile);
+				}
+			} else {
+				Toast.makeText(this, getString(R.string.core_can_read), Toast.LENGTH_LONG).show();
+				finish();
+			}
+		}
+	}
+
+	public void copy(File src, File dst) {
+		InputStream in = null;
+		OutputStream out = null;
+
+		try {
+			in = new FileInputStream(src);
+			out = new FileOutputStream(dst);
+			// Transfer bytes from in to out
+			byte[] buf = new byte[1024];
+			int len;
+			while ((len = in.read(buf)) > 0) {
+				out.write(buf, 0, len);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				if (in != null) {
+					in.close();
+				}
+				if (out != null) {
+					out.close();
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
 	@Override

@@ -2,4 +2,5 @@
 <resources>
     <string name="exit_game">Exit Game</string>
     <string name="game_menu">Menu</string>
+    <string name="core_can_read">The core can\'t read.</string>
 </resources>
