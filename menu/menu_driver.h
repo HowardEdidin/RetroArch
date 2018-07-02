@@ -32,6 +32,7 @@
 #include "menu_input.h"
 #include "menu_entries.h"
 
+#include "../audio/audio_driver.h"
 #include "../gfx/video_driver.h"
 #include "../file_path_special.h"
 #include "../gfx/font_driver.h"
@@ -61,6 +62,7 @@ enum menu_image_type
    MENU_IMAGE_NONE = 0,
    MENU_IMAGE_WALLPAPER,
    MENU_IMAGE_THUMBNAIL,
+   MENU_IMAGE_LEFT_THUMBNAIL,
    MENU_IMAGE_SAVESTATE_THUMBNAIL
 };
 
@@ -99,9 +101,6 @@ enum rarch_menu_ctl_state
    RARCH_MENU_CTL_SET_OWN_DRIVER,
    RARCH_MENU_CTL_UNSET_OWN_DRIVER,
    RARCH_MENU_CTL_OWNS_DRIVER,
-   RARCH_MENU_CTL_PLAYLIST_FREE,
-   RARCH_MENU_CTL_PLAYLIST_INIT,
-   RARCH_MENU_CTL_PLAYLIST_GET,
    RARCH_MENU_CTL_FIND_DRIVER,
    RARCH_MENU_CTL_LIST_FREE,
    RARCH_MENU_CTL_LIST_SET_SELECTION,
@@ -132,6 +131,8 @@ enum rarch_menu_ctl_state
    MENU_NAVIGATION_CTL_SET_SCROLL_ACCEL,
    MENU_NAVIGATION_CTL_GET_SCROLL_ACCEL
 };
+
+#define MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS        (AUDIO_MIXER_MAX_STREAMS-1)
 
 enum menu_settings_type
 {
@@ -190,6 +191,23 @@ enum menu_settings_type
    MENU_SETTINGS_CORE_DISK_OPTIONS_DISK_IMAGE_APPEND,
    MENU_SETTINGS_CORE_DISK_OPTIONS_DISK_CYCLE_TRAY_STATUS,
 
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_BEGIN,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_END = MENU_SETTINGS_AUDIO_MIXER_STREAM_BEGIN + MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_BEGIN,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_END = MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_BEGIN + MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS,
+
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_STOP_BEGIN,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_STOP_END = MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_STOP_BEGIN + MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_REMOVE_BEGIN,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_REMOVE_END = MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_REMOVE_BEGIN + MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_BEGIN,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_END = MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_BEGIN + MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_LOOPED_BEGIN,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_LOOPED_END = MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_LOOPED_BEGIN + MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_SEQUENTIAL_BEGIN,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_SEQUENTIAL_END = MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_PLAY_SEQUENTIAL_BEGIN + MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_VOLUME_BEGIN,
+   MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_VOLUME_END = MENU_SETTINGS_AUDIO_MIXER_STREAM_ACTIONS_VOLUME_BEGIN + MENU_SETTINGS_AUDIO_MIXER_MAX_STREAMS,
    MENU_SETTINGS_BIND_BEGIN,
    MENU_SETTINGS_BIND_LAST = MENU_SETTINGS_BIND_BEGIN + RARCH_ANALOG_RIGHT_Y_MINUS,
    MENU_SETTINGS_BIND_ALL_LAST = MENU_SETTINGS_BIND_BEGIN + RARCH_MENU_TOGGLE,
@@ -205,9 +223,9 @@ enum menu_settings_type
    MENU_SETTINGS_CHEAT_BEGIN,
    MENU_SETTINGS_CHEAT_END = MENU_SETTINGS_CHEAT_BEGIN + (MAX_CHEAT_COUNTERS - 1),
    MENU_SETTINGS_INPUT_DESC_BEGIN,
-   MENU_SETTINGS_INPUT_DESC_END = MENU_SETTINGS_INPUT_DESC_BEGIN + (MAX_USERS * (RARCH_FIRST_CUSTOM_BIND + 4)),
+   MENU_SETTINGS_INPUT_DESC_END = MENU_SETTINGS_INPUT_DESC_BEGIN + ((RARCH_FIRST_CUSTOM_BIND + 8) * MAX_USERS),
    MENU_SETTINGS_INPUT_DESC_KBD_BEGIN,
-   MENU_SETTINGS_INPUT_DESC_KBD_END = MENU_SETTINGS_INPUT_DESC_KBD_BEGIN + 135,
+   MENU_SETTINGS_INPUT_DESC_KBD_END = MENU_SETTINGS_INPUT_DESC_KBD_BEGIN + (RARCH_MAX_KEYS * MAX_USERS),
 
    MENU_SETTINGS_SUBSYSTEM_LOAD,
 
@@ -242,6 +260,7 @@ enum xmb_color_theme
    XMB_THEME_DARK,
    XMB_THEME_LIGHT,
    XMB_THEME_WALLPAPER,
+   XMB_THEME_MORNING_BLUE,
    XMB_THEME_LAST
 };
 
@@ -284,7 +303,9 @@ enum menu_display_driver_type
    MENU_VIDEO_DRIVER_GENERIC = 0,
    MENU_VIDEO_DRIVER_OPENGL,
    MENU_VIDEO_DRIVER_VULKAN,
-   MENU_VIDEO_DRIVER_DIRECT3D,
+   MENU_VIDEO_DRIVER_DIRECT3D8,
+   MENU_VIDEO_DRIVER_DIRECT3D9,
+   MENU_VIDEO_DRIVER_DIRECT3D10,
    MENU_VIDEO_DRIVER_DIRECT3D11,
    MENU_VIDEO_DRIVER_DIRECT3D12,
    MENU_VIDEO_DRIVER_VITA2D,
@@ -346,13 +367,17 @@ typedef struct menu_display_ctx_driver
          bool is_threaded);
    enum menu_display_driver_type type;
    const char *ident;
+   bool handles_transform;
 } menu_display_ctx_driver_t;
 
 
 typedef struct
 {
+   unsigned rpl_entry_selection_ptr;
+   size_t                     core_len;
    uint64_t state;
 
+   char *core_buf;
    char menu_state_msg[1024];
    /* Scratchpad variables. These are used for instance
     * by the filebrowser when having to store intermediary
@@ -361,9 +386,18 @@ typedef struct
    char deferred_path[PATH_MAX_LENGTH];
    char scratch_buf[PATH_MAX_LENGTH];
    char scratch2_buf[PATH_MAX_LENGTH];
-
-   /* path to the currently loaded database playlist file. */
    char db_playlist_file[PATH_MAX_LENGTH];
+   char filebrowser_label[PATH_MAX_LENGTH];
+   char detect_content_path[PATH_MAX_LENGTH];
+
+   /* This is used for storing intermediary variables
+    * that get used later on during menu actions -
+    * for instance, selecting a shader pass for a shader
+    * slot */
+   struct
+   {
+      unsigned                unsigned_var;
+   } scratchpad;
 } menu_handle_t;
 
 typedef struct menu_display_ctx_draw
@@ -483,7 +517,7 @@ typedef struct menu_ctx_driver
    int (*pointer_tap)(void *data, unsigned x, unsigned y, unsigned ptr,
          menu_file_list_cbs_t *cbs,
          menu_entry_t *entry, unsigned action);
-   void (*update_thumbnail_path)(void *data, unsigned i);
+   void (*update_thumbnail_path)(void *data, unsigned i, char pos);
    void (*update_thumbnail_image)(void *data);
    void (*set_thumbnail_system)(void *data, char* s, size_t len);
    void (*set_thumbnail_content)(void *data, char* s, size_t len);
@@ -497,12 +531,6 @@ typedef struct menu_ctx_driver
          menu_file_list_cbs_t *cbs,
          menu_entry_t *entry, unsigned action);
 } menu_ctx_driver_t;
-
-typedef struct menu_ctx_load_image
-{
-   void *data;
-   enum menu_image_type type;
-} menu_ctx_load_image_t;
 
 typedef struct menu_ctx_displaylist
 {
@@ -595,9 +623,6 @@ const char *menu_driver_find_ident(int index);
  **/
 const char* config_get_menu_driver_options(void);
 
-/* HACK */
-extern unsigned int rdb_entry_start_game_selection_ptr;
-
 const char *menu_driver_ident(void);
 
 bool menu_driver_render(bool is_idle, bool is_inited, bool is_dummy);
@@ -623,8 +648,6 @@ bool menu_driver_list_clear(void *data);
 void menu_driver_navigation_set(bool scroll);
 
 void menu_driver_populate_entries(menu_displaylist_info_t *info);
-
-bool menu_driver_load_image(menu_ctx_load_image_t *load_image_info);
 
 bool menu_driver_push_list(menu_ctx_displaylist_t *disp_list);
 
@@ -652,6 +675,8 @@ video_coord_array_t *menu_display_get_coords_array(void);
 const uint8_t *menu_display_get_font_framebuffer(void);
 void menu_display_set_font_framebuffer(const uint8_t *buffer);
 bool menu_display_libretro(bool is_idle, bool is_inited, bool is_dummy);
+bool menu_display_libretro_running(bool rarch_is_inited,
+      bool rarch_is_dummy_core);
 
 void menu_display_set_width(unsigned width);
 void menu_display_get_fb_size(unsigned *fb_width, unsigned *fb_height,
@@ -679,6 +704,11 @@ void menu_display_clear_color(menu_display_ctx_clearcolor_t *color,
       video_frame_info_t *video_info);
 void menu_display_draw(menu_display_ctx_draw_t *draw,
       video_frame_info_t *video_info);
+void menu_display_draw_keyboard(
+      uintptr_t hover_texture,
+      const font_data_t *font,
+      video_frame_info_t *video_info,
+      char *grid[], unsigned id);
 
 void menu_display_draw_pipeline(menu_display_ctx_draw_t *draw,
       video_frame_info_t *video_info);
@@ -716,6 +746,9 @@ void menu_display_handle_wallpaper_upload(void *task_data,
 void menu_display_handle_thumbnail_upload(void *task_data,
       void *user_data, const char *err);
 
+void menu_display_handle_left_thumbnail_upload(void *task_data,
+      void *user_data, const char *err);
+
 void menu_display_handle_savestate_thumbnail_upload(void *task_data,
       void *user_data, const char *err);
 
@@ -741,11 +774,20 @@ void menu_display_draw_text(
 
 #define menu_display_set_alpha(color, alpha_value) (color[3] = color[7] = color[11] = color[15] = (alpha_value))
 
-font_data_t *menu_display_font(enum application_special_type type, float font_size,
+font_data_t *menu_display_font(
+      enum application_special_type type,
+      float font_size,
       bool video_is_threaded);
 
-void menu_display_reset_textures_list(const char *texture_path, const char *iconpath,
-      uintptr_t *item, enum texture_filter_type filter_type);
+void menu_display_reset_textures_list(
+      const char *texture_path,
+      const char *iconpath,
+      uintptr_t *item,
+      enum texture_filter_type filter_type);
+
+/* Returns the OSK key at a given position */
+int menu_display_osk_ptr_at_pos(void *data, int x, int y,
+      unsigned width, unsigned height);
 
 void menu_driver_destroy(void);
 
@@ -753,7 +795,9 @@ extern uintptr_t menu_display_white_texture;
 
 extern menu_display_ctx_driver_t menu_display_ctx_gl;
 extern menu_display_ctx_driver_t menu_display_ctx_vulkan;
-extern menu_display_ctx_driver_t menu_display_ctx_d3d;
+extern menu_display_ctx_driver_t menu_display_ctx_d3d8;
+extern menu_display_ctx_driver_t menu_display_ctx_d3d9;
+extern menu_display_ctx_driver_t menu_display_ctx_d3d10;
 extern menu_display_ctx_driver_t menu_display_ctx_d3d11;
 extern menu_display_ctx_driver_t menu_display_ctx_d3d12;
 extern menu_display_ctx_driver_t menu_display_ctx_vita2d;

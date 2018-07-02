@@ -75,7 +75,7 @@ typedef struct
    VGImage vgimage[MAX_EGLIMAGE_TEXTURES];
 } vc_ctx_data_t;
 
-static enum gfx_ctx_api vc_api;
+static enum gfx_ctx_api vc_api = GFX_CTX_NONE;
 static PFNEGLCREATEIMAGEKHRPROC peglCreateImageKHR;
 static PFNEGLDESTROYIMAGEKHRPROC peglDestroyImageKHR;
 
@@ -357,6 +357,11 @@ static bool gfx_ctx_vc_set_video_mode(void *data,
 #endif
 
    return true;
+}
+
+static enum gfx_ctx_api gfx_ctx_vc_get_api(void *data)
+{
+   return vc_api;
 }
 
 static bool gfx_ctx_vc_bind_api(void *data,
@@ -645,7 +650,8 @@ static void gfx_ctx_vc_swap_buffers(void *data, void *data2)
 
    egl_swap_buffers(&vc->egl);
 
-   /* Wait for vsync immediately if we don't want egl_swap_buffers to triple-buffer */
+   /* Wait for vsync immediately if we don't 
+    * want egl_swap_buffers to triple-buffer */
    if (video_info->max_swapchain_images <= 2)
    {
       /* We DON'T wait to wait without callback function ready! */
@@ -689,7 +695,7 @@ static gfx_ctx_proc_t gfx_ctx_vc_get_proc_address(const char *symbol)
 static uint32_t gfx_ctx_vc_get_flags(void *data)
 {
    uint32_t flags = 0;
-   BIT32_SET(flags, GFX_CTX_FLAGS_NONE);
+   BIT32_SET(flags, GFX_CTX_FLAGS_CUSTOMIZABLE_SWAPCHAIN_IMAGES);
    return flags;
 }
 
@@ -701,10 +707,12 @@ static void gfx_ctx_vc_set_flags(void *data, uint32_t flags)
 const gfx_ctx_driver_t gfx_ctx_videocore = {
    gfx_ctx_vc_init,
    gfx_ctx_vc_destroy,
+   gfx_ctx_vc_get_api,
    gfx_ctx_vc_bind_api,
    gfx_ctx_vc_set_swap_interval,
    gfx_ctx_vc_set_video_mode,
    gfx_ctx_vc_get_video_size,
+   NULL, /* get_refresh_rate */
    NULL, /* get_video_output_size */
    NULL, /* get_video_output_prev */
    NULL, /* get_video_output_next */
@@ -728,5 +736,4 @@ const gfx_ctx_driver_t gfx_ctx_videocore = {
    gfx_ctx_vc_bind_hw_render,
    NULL,
    NULL
-
 };

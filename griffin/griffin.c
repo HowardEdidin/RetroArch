@@ -17,10 +17,6 @@
 #define CINTERFACE
 #define HAVE_IBXM 1
 
-#if defined(HAVE_CG) || defined(HAVE_HLSL) || defined(HAVE_GLSL)
-#define HAVE_SHADERS 1
-#endif
-
 #if defined(HAVE_ZLIB) || defined(HAVE_7ZIP)
 #define HAVE_COMPRESSION 1
 #endif
@@ -325,14 +321,15 @@ VIDEO DRIVER
 ============================================================ */
 #if defined(HAVE_D3D)
 #include "../gfx/common/d3d_common.c"
-#include "../gfx/drivers_context/d3d_ctx.c"
 
 #if defined(HAVE_D3D8)
 #include "../gfx/drivers/d3d8.c"
+#include "../gfx/common/d3d8_common.c"
 #endif
 
 #if defined(HAVE_D3D9)
 #include "../gfx/drivers/d3d9.c"
+#include "../gfx/common/d3d9_common.c"
 
 #ifdef HAVE_HLSL
 #include "../gfx/drivers_renderchain/d3d9_hlsl_renderchain.c"
@@ -397,7 +394,6 @@ VIDEO DRIVER
 #include "../gfx/drivers/drm_gfx.c"
 #endif
 
-#include "../gfx/drivers_renderchain/null_renderchain.c"
 #include "../gfx/display_servers/dispserv_null.c"
 
 #ifdef HAVE_OPENGL
@@ -511,6 +507,10 @@ FONTS
 
 #if defined(HAVE_VULKAN)
 #include "../gfx/drivers_font/vulkan_raster_font.c"
+#endif
+
+#if defined(HAVE_D3D10)
+#include "../gfx/drivers_font/d3d10_font.c"
 #endif
 
 #if defined(HAVE_D3D11)
@@ -801,6 +801,7 @@ AUDIO
 DRIVERS
 ============================================================ */
 #include "../gfx/video_driver.c"
+#include "../gfx/video_crt_switch.c"
 #include "../gfx/video_display_server.c"
 #include "../gfx/video_coord_array.c"
 #include "../input/input_driver.c"
@@ -1136,7 +1137,6 @@ MENU
 #include "../menu/widgets/menu_dialog.c"
 #include "../menu/widgets/menu_input_dialog.c"
 #include "../menu/widgets/menu_input_bind_dialog.c"
-#include "../menu/widgets/menu_list.c"
 #include "../menu/widgets/menu_osk.c"
 #include "../menu/cbs/menu_cbs_ok.c"
 #include "../menu/cbs/menu_cbs_cancel.c"
@@ -1164,8 +1164,16 @@ MENU
 
 #include "../menu/drivers_display/menu_display_null.c"
 
-#if defined(HAVE_D3D)
-#include "../menu/drivers_display/menu_display_d3d.c"
+#if defined(HAVE_D3D8)
+#include "../menu/drivers_display/menu_display_d3d8.c"
+#endif
+
+#if defined(HAVE_D3D9)
+#include "../menu/drivers_display/menu_display_d3d9.c"
+#endif
+
+#if defined(HAVE_D3D10)
+#include "../menu/drivers_display/menu_display_d3d10.c"
 #endif
 
 #if defined(HAVE_D3D11)
@@ -1242,14 +1250,21 @@ MENU
 #include "../cores/libretro-net-retropad/net_retropad_core.c"
 #endif
 
-#ifdef HAVE_KEYMAPPER
 #include "../input/input_mapper.c"
-#endif
 
 #include "../command.c"
 
 #if defined(HAVE_NETWORKING)
 #include "../libretro-common/net/net_http_parse.c"
+#endif
+
+#ifdef HAVE_RUNAHEAD
+#include "../runahead/mem_util.c"
+#include "../runahead/secondary_core.c"
+#include "../runahead/run_ahead.c"
+#include "../runahead/copy_load_info.c"
+#include "../runahead/dirty_input.c"
+#include "../runahead/mylist.c"
 #endif
 
 /*============================================================
@@ -1258,7 +1273,7 @@ DEPENDENCIES
 #ifdef WANT_ZLIB
 #include "../deps/libz/adler32.c"
 #include "../deps/libz/compress.c"
-#include "../deps/libz/crc32.c"
+#include "../deps/libz/libz-crc32.c"
 #include "../deps/libz/deflate.c"
 #include "../deps/libz/gzclose.c"
 #include "../deps/libz/gzlib.c"
@@ -1291,11 +1306,24 @@ DEPENDENCIES
 #endif
 
 #ifdef HAVE_CHD
-#include "../libretro-common/formats/libchdr/bitstream.c"
-#include "../libretro-common/formats/libchdr/cdrom.c"
-#include "../libretro-common/formats/libchdr/chd.c"
-#include "../libretro-common/formats/libchdr/flac.c"
-#include "../libretro-common/formats/libchdr/huffman.c"
+#include "../libretro-common/formats/libchdr/libchdr_bitstream.c"
+#include "../libretro-common/formats/libchdr/libchdr_cdrom.c"
+#include "../libretro-common/formats/libchdr/libchdr_chd.c"
+
+#ifdef HAVE_FLAC
+#include "../libretro-common/formats/libchdr/libchdr_flac.c"
+#include "../libretro-common/formats/libchdr/libchdr_flac_codec.c"
+#endif
+
+#ifdef HAVE_ZLIB
+#include "../libretro-common/formats/libchdr/libchdr_zlib.c"
+#endif
+
+#ifdef HAVE_7ZIP
+#include "../libretro-common/formats/libchdr/libchdr_lzma.c"
+#endif
+
+#include "../libretro-common/formats/libchdr/libchdr_huffman.c"
 
 #include "../libretro-common/streams/chd_stream.c"
 #endif

@@ -13,10 +13,6 @@
 * If not, see <http://www.gnu.org/licenses/>.
 */
 
-#if defined(HAVE_CG) || defined(HAVE_HLSL) || defined(HAVE_GLSL)
-#define HAVE_SHADERS 1
-#endif
-
 #if defined(HAVE_ZLIB) || defined(HAVE_7ZIP)
 #define HAVE_COMPRESSION 1
 #endif
@@ -37,16 +33,14 @@ MENU
 UI
 ============================================================ */
 #if defined(HAVE_QT)
+#define HAVE_MAIN /* also requires defining in frontend.c */
 #include "../ui/drivers/ui_qt.cpp"
 
 #include "../ui/drivers/qt/ui_qt_window.cpp"
+#include "../ui/drivers/qt/ui_qt_load_core_window.cpp"
 #include "../ui/drivers/qt/ui_qt_browser_window.cpp"
 #include "../ui/drivers/qt/ui_qt_msg_window.cpp"
 #include "../ui/drivers/qt/ui_qt_application.cpp"
-#endif
-
-#if defined(HAVE_QT_WRAPPER)
-#include "../ui/drivers/ui_qt.cpp"
 #endif
 
 /*============================================================

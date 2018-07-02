@@ -663,6 +663,7 @@ static void exynos_deinit(struct exynos_data *pdata)
 {
    drm_restore_crtc();
 
+   g_drm_mode       = NULL;
    pdata->width     = 0;
    pdata->height    = 0;
    pdata->num_pages = 0;
@@ -1324,6 +1325,17 @@ static bool exynos_gfx_frame(void *data, const void *frame, unsigned width,
       menu_driver_frame(video_info);
 #endif
    }
+   else if (video_info->statistics_show)
+   {
+      struct font_params *osd_params = video_info ? 
+         (struct font_params*)&video_info->osd_stat_params : NULL;
+
+      if (osd_params)
+      {
+         font_driver_render_msg(video_info, NULL, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params);
+      }
+   }
 
    if (msg)
    {
@@ -1478,11 +1490,13 @@ static void exynos_show_mouse(void *data, bool state)
 }
 
 static const video_poke_interface_t exynos_poke_interface = {
+   NULL, /* get_flags */
    NULL, /* set_coords */
    NULL, /* set_mvp */
    NULL,
    NULL,
    NULL, /* set_video_mode */
+   drm_get_refresh_rate,
    NULL, /* set_filtering */
    NULL, /* get_video_output_size */
    NULL, /* get_video_output_prev */

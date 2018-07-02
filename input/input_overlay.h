@@ -28,12 +28,6 @@
 
 RETRO_BEGIN_DECLS
 
-#define BOX_RADIAL       0x18df06d2U
-#define BOX_RECT         0x7c9d4d93U
-
-#define KEY_ANALOG_LEFT  0x56b92e81U
-#define KEY_ANALOG_RIGHT 0x2e4dc654U
-
 /* Overlay driver acts as a medium between input drivers
  * and video driver.
  *
@@ -183,7 +177,7 @@ struct overlay_desc
    unsigned retro_key_idx;
 
    /* This is a bit mask of all input binds to set with this overlay control */
-   retro_bits_t button_mask;
+   input_bits_t button_mask;
 
    char next_index_name[64];
 

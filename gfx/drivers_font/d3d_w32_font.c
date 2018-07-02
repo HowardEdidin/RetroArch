@@ -14,6 +14,8 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define CINTERFACE
+
 #include <tchar.h>
 
 #include <compat/strl.h>
@@ -24,6 +26,7 @@
 
 #include "../drivers/d3d.h"
 #include "../common/d3d_common.h"
+#include "../common/d3d9_common.h"
 #include "../font_driver.h"
 
 #include "../../configuration.h"
@@ -45,7 +48,7 @@ typedef struct d3dx_font_desc
 
 typedef struct
 {
-   d3d_video_t *d3d;
+   d3d9_video_t *d3d;
    void *font;
    uint32_t font_size;
    uint32_t ascent;
@@ -77,16 +80,16 @@ static void *d3dfonts_w32_init_font(void *video_data,
 #endif
 
    d3dfonts->font_size  = font_size * 1.2; /* to match the other font drivers */
-   d3dfonts->d3d        = (d3d_video_t*)video_data;
+   d3dfonts->d3d        = (d3d9_video_t*)video_data;
 
    desc.Height          = d3dfonts->font_size;
 
-   if (!d3dx_create_font_indirect(d3dfonts->d3d->dev,
+   if (!d3d9x_create_font_indirect(d3dfonts->d3d->dev,
             &desc, (void**)&d3dfonts->font))
       goto error;
 
 
-   d3dx_font_get_text_metrics(d3dfonts->font, &metrics);
+   d3d9x_font_get_text_metrics(d3dfonts->font, &metrics);
 
    d3dfonts->ascent     = metrics.tmAscent;
 
@@ -105,7 +108,7 @@ static void d3dfonts_w32_free_font(void *data, bool is_threaded)
       return;
 
    if (d3dfonts->font)
-      d3dx_font_release(d3dfonts->font);
+      d3d9x_font_release(d3dfonts->font);
 
    free(d3dfonts);
 }
@@ -117,10 +120,10 @@ static int d3dfonts_w32_get_message_width(void* data, const char* msg,
    RECT box             = {0,0,0,0};
    d3dfonts_t *d3dfonts = (d3dfonts_t*)data;
 
-   if (!d3dfonts || !d3dfonts->d3d | !msg)
+   if (!d3dfonts || !msg)
       return 0;
 
-   d3dx_font_draw_text(d3dfonts->font, NULL, (void*)msg,
+   d3d9x_font_draw_text(d3dfonts->font, NULL, (void*)msg,
          msg_len? msg_len : -1, &box, DT_CALCRECT, 0);
 
    return box.right - box.left;
@@ -128,14 +131,13 @@ static int d3dfonts_w32_get_message_width(void* data, const char* msg,
 
 
 static void d3dfonts_w32_render_msg(video_frame_info_t *video_info,
-      void *data, const char *msg, const void *userdata)
+      void *data, const char *msg, const struct font_params *params)
 {
    unsigned format;
    unsigned a, r, g, b;
    RECT rect, rect_shifted;
    RECT *p_rect_shifted             = NULL;
    RECT *p_rect                     = NULL;
-   const struct font_params *params = (const struct font_params*)userdata;
    d3dfonts_t *d3dfonts             = (d3dfonts_t*)data;
    unsigned width                   = video_info->width;
    unsigned height                  = video_info->height;
@@ -146,8 +148,6 @@ static void d3dfonts_w32_render_msg(video_frame_info_t *video_info,
 
    if (!d3dfonts || !d3dfonts->d3d || !msg)
       return;
-   if (!d3d_begin_scene(d3dfonts->d3d->dev))
-      return;
 
    format         = DT_LEFT;
    p_rect         = &d3dfonts->d3d->font_rect;
@@ -155,7 +155,6 @@ static void d3dfonts_w32_render_msg(video_frame_info_t *video_info,
 
    if(params)
    {
-
       a = FONT_COLOR_GET_ALPHA(params->color);
       r = FONT_COLOR_GET_RED(params->color);
       g = FONT_COLOR_GET_GREEN(params->color);
@@ -215,15 +214,13 @@ static void d3dfonts_w32_render_msg(video_frame_info_t *video_info,
       unsigned drop_g = g * drop_mod;
       unsigned drop_b = b * drop_mod;
 
-      d3dx_font_draw_text(d3dfonts->font, NULL,
+      d3d9x_font_draw_text(d3dfonts->font, NULL,
             (void*)msg, -1, p_rect_shifted, format,
             D3DCOLOR_ARGB(drop_a , drop_r, drop_g, drop_b));
    }
 
-   d3dx_font_draw_text(d3dfonts->font, NULL, (void*)msg, -1,
+   d3d9x_font_draw_text(d3dfonts->font, NULL, (void*)msg, -1,
       p_rect, format, D3DCOLOR_ARGB(a, r, g, b));
-
-   d3d_end_scene(d3dfonts->d3d->dev);
 }
 
 font_renderer_t d3d_win32_font = {

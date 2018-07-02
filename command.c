@@ -140,6 +140,8 @@ static const struct cmd_action_map action_map[] = {
 static const struct cmd_map map[] = {
    { "FAST_FORWARD",           RARCH_FAST_FORWARD_KEY },
    { "FAST_FORWARD_HOLD",      RARCH_FAST_FORWARD_HOLD_KEY },
+   { "SLOWMOTION",             RARCH_SLOWMOTION_KEY },
+   { "SLOWMOTION_HOLD",        RARCH_SLOWMOTION_HOLD_KEY },
    { "LOAD_STATE",             RARCH_LOAD_STATE_KEY },
    { "SAVE_STATE",             RARCH_SAVE_STATE_KEY },
    { "FULLSCREEN_TOGGLE",      RARCH_FULLSCREEN_TOGGLE_KEY },
@@ -160,7 +162,6 @@ static const struct cmd_map map[] = {
    { "MUTE",                   RARCH_MUTE },
    { "OSK",                    RARCH_OSK },
    { "NETPLAY_GAME_WATCH",     RARCH_NETPLAY_GAME_WATCH },
-   { "SLOWMOTION",             RARCH_SLOWMOTION },
    { "VOLUME_UP",              RARCH_VOLUME_UP },
    { "VOLUME_DOWN",            RARCH_VOLUME_DOWN },
    { "OVERLAY_NEXT",           RARCH_OVERLAY_NEXT },
@@ -168,6 +169,7 @@ static const struct cmd_map map[] = {
    { "DISK_NEXT",              RARCH_DISK_NEXT },
    { "DISK_PREV",              RARCH_DISK_PREV },
    { "GRAB_MOUSE_TOGGLE",      RARCH_GRAB_MOUSE_TOGGLE },
+   { "UI_COMPANION_TOGGLE",    RARCH_UI_COMPANION_TOGGLE },
    { "GAME_FOCUS_TOGGLE",      RARCH_GAME_FOCUS_TOGGLE },
    { "MENU_TOGGLE",            RARCH_MENU_TOGGLE },
    { "MENU_UP",                RETRO_DEVICE_ID_JOYPAD_UP },
@@ -219,26 +221,13 @@ static bool command_reply(const char * data, size_t len)
 bool command_set_shader(const char *arg)
 {
    char msg[256];
-   enum rarch_shader_type type = RARCH_SHADER_NONE;
-   struct video_shader      *shader  = menu_shader_get();
+   bool is_preset                  = false;
+   struct video_shader    *shader  = menu_shader_get();
+   enum rarch_shader_type     type = video_shader_get_type_from_ext(
+         path_get_extension(arg), &is_preset);
 
-   switch (msg_hash_to_file_type(msg_hash_calculate(path_get_extension(arg))))
-   {
-      case FILE_TYPE_SHADER_GLSL:
-      case FILE_TYPE_SHADER_PRESET_GLSLP:
-         type = RARCH_SHADER_GLSL;
-         break;
-      case FILE_TYPE_SHADER_CG:
-      case FILE_TYPE_SHADER_PRESET_CGP:
-         type = RARCH_SHADER_CG;
-         break;
-      case FILE_TYPE_SHADER_SLANG:
-      case FILE_TYPE_SHADER_PRESET_SLANGP:
-         type = RARCH_SHADER_SLANG;
-         break;
-      default:
-         return false;
-   }
+   if (type == RARCH_SHADER_NONE)
+      return false;
 
    snprintf(msg, sizeof(msg), "Shader: \"%s\"", arg);
    runloop_msg_queue_push(msg, 1, 120, true);
@@ -255,8 +244,7 @@ static bool command_read_ram(const char *arg)
 {
    cheevos_var_t var;
    unsigned i;
-   unsigned nbytes;
-   char reply[256];
+   char reply[256]      = {0};
    const uint8_t * data = NULL;
    char *reply_at       = NULL;
 
@@ -290,7 +278,6 @@ static bool command_read_ram(const char *arg)
 
 static bool command_write_ram(const char *arg)
 {
-   int i;
    cheevos_var_t var;
    unsigned nbytes   = 0;
    uint8_t *data     = NULL;
@@ -1029,7 +1016,7 @@ static void command_event_init_controllers(void)
             /* Ideally these checks shouldn't be required but if we always
              * call core_set_controller_port_device input won't work on
              * cores that don't set port information properly */
-            if (info && info->ports.size != 0 && i < info->ports.size)
+            if (info && info->ports.size != 0)
                set_controller = true;
             break;
          default:
@@ -1043,7 +1030,7 @@ static void command_event_init_controllers(void)
             break;
       }
 
-      if (set_controller)
+      if (set_controller && i < info->ports.size)
       {
          pad.device     = device;
          pad.port       = i;
@@ -1714,31 +1701,28 @@ void command_playlist_push_write(
 void command_playlist_update_write(
       void *data,
       size_t idx,
-      const char *core_display_name,
+      const char *path,
       const char *label,
-      const char *path)
+      const char *core_path,
+      const char *core_display_name,
+      const char *crc32,
+      const char *db_name)
 {
    playlist_t *plist    = (playlist_t*)data;
-   playlist_t *playlist = NULL;
+   playlist_t *playlist = plist ? plist : playlist_get_cached();
 
-   if (plist)
-      playlist          = plist;
-#ifdef HAVE_MENU
-   else
-      menu_driver_ctl(RARCH_MENU_CTL_PLAYLIST_GET, &playlist);
-#endif
    if (!playlist)
       return;
 
    playlist_update(
          playlist,
          idx,
-         label,
-         NULL,
          path,
+         label,
+         core_path,
          core_display_name,
-         NULL,
-         NULL);
+         crc32,
+         db_name);
 
    playlist_write_file(playlist);
 }
@@ -1804,10 +1788,11 @@ bool command_event(enum event_command cmd, void *data)
                return false;
 #endif
 
-            libretro_get_system_info(
+            if (!libretro_get_system_info(
                   core_path,
                   system,
-                  &system_info->load_no_content);
+                  &system_info->load_no_content))
+               return false;
             info_find.path = core_path;
 
             if (!core_info_load(&info_find))
@@ -1820,11 +1805,17 @@ bool command_event(enum event_command cmd, void *data)
          }
          break;
       case CMD_EVENT_LOAD_CORE:
-         command_event(CMD_EVENT_LOAD_CORE_PERSIST, NULL);
+      {
+         bool success = command_event(CMD_EVENT_LOAD_CORE_PERSIST, NULL);
+
 #ifndef HAVE_DYNAMIC
          command_event(CMD_EVENT_QUIT, NULL);
+#else
+         if (!success)
+            return false;
 #endif
          break;
+      }
       case CMD_EVENT_LOAD_STATE:
          /* Immutable - disallow savestate load when
           * we absolutely cannot change game state. */
@@ -1942,7 +1933,7 @@ bool command_event(enum event_command cmd, void *data)
          cheevos_toggle_hardcore_mode();
 #endif
          break;
-      /* this fallthrough is on purpose, it should do 
+      /* this fallthrough is on purpose, it should do
          a CMD_EVENT_REINIT too */
       case CMD_EVENT_REINIT_FROM_TOGGLE:
          retroarch_unset_forced_fullscreen();
@@ -2027,7 +2018,7 @@ TODO: Add a setting for these tweaks */
       case CMD_EVENT_AUTOSAVE_INIT:
          command_event(CMD_EVENT_AUTOSAVE_DEINIT, NULL);
 #ifdef HAVE_THREADS
-	 {
+    {
 #ifdef HAVE_NETWORKING
          /* Only enable state manager if netplay is not underway
             TODO: Add a setting for these tweaks */
@@ -2041,7 +2032,7 @@ TODO: Add a setting for these tweaks */
             else
                runloop_unset(RUNLOOP_ACTION_AUTOSAVE);
          }
-	 }
+    }
 #endif
          break;
       case CMD_EVENT_AUTOSAVE_STATE:
@@ -2213,11 +2204,22 @@ TODO: Add a setting for these tweaks */
          break;
       case CMD_EVENT_CORE_INFO_INIT:
          {
+            char ext_name[255];
             settings_t *settings      = config_get_ptr();
+
+            ext_name[0]               = '\0';
+
             command_event(CMD_EVENT_CORE_INFO_DEINIT, NULL);
 
+            if (!frontend_driver_get_core_extension(ext_name, sizeof(ext_name)))
+               return false;
+
             if (!string_is_empty(settings->paths.directory_libretro))
-               core_info_init_list();
+               core_info_init_list(settings->paths.path_libretro_info,
+                     settings->paths.directory_libretro,
+                     ext_name,
+                     settings->bools.show_hidden_files
+                     );
          }
          break;
       case CMD_EVENT_CORE_DEINIT:
@@ -2312,7 +2314,7 @@ TODO: Add a setting for these tweaks */
       case CMD_EVENT_RESUME:
          rarch_menu_running_finished();
          if (ui_companion_is_on_foreground())
-            ui_companion_driver_toggle();
+            ui_companion_driver_toggle(false);
          break;
       case CMD_EVENT_ADD_TO_FAVORITES:
       {
@@ -2340,6 +2342,27 @@ TODO: Add a setting for these tweaks */
                );
          runloop_msg_queue_push(msg_hash_to_str(MSG_ADDED_TO_FAVORITES), 1, 180, true);
          break;
+
+      }
+      case CMD_EVENT_RESET_CORE_ASSOCIATION:
+      {
+         const char *core_name          = "DETECT";
+         const char *core_path          = "DETECT";
+         size_t *playlist_index         = (size_t*)data;
+
+         command_playlist_update_write(
+            NULL,
+            *playlist_index,
+            NULL,
+            NULL,
+            core_path,
+            core_name,
+            NULL,
+            NULL);
+
+         runloop_msg_queue_push(msg_hash_to_str(MSG_RESET_CORE_ASSOCIATION), 1, 180, true);
+         break;
+
       }
       case CMD_EVENT_RESTART_RETROARCH:
          if (!frontend_driver_set_fork(FRONTEND_FORK_RESTART))
@@ -2562,7 +2585,7 @@ TODO: Add a setting for these tweaks */
       case CMD_EVENT_FULLSCREEN_TOGGLE:
          {
             settings_t *settings      = config_get_ptr();
-            bool new_fullscreen_state = !settings->bools.video_fullscreen 
+            bool new_fullscreen_state = !settings->bools.video_fullscreen
                && !retroarch_is_forced_fullscreen();
             if (!video_driver_has_windowed())
                return false;
@@ -2721,6 +2744,11 @@ TODO: Add a setting for these tweaks */
                video_driver_show_mouse();
          }
          break;
+      case CMD_EVENT_UI_COMPANION_TOGGLE:
+         {
+            ui_companion_driver_toggle(true);
+            break;
+         }
       case CMD_EVENT_GAME_FOCUS_TOGGLE:
          {
             static bool game_focus_state  = false;

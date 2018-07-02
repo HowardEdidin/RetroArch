@@ -67,6 +67,7 @@ struct config_bool_setting
    bool def_enable;
    bool def;
    bool handle;
+   enum rarch_override_setting override;
 };
 
 struct config_int_setting
@@ -76,6 +77,7 @@ struct config_int_setting
    bool def_enable;
    int def;
    bool handle;
+   enum rarch_override_setting override;
 };
 
 struct config_uint_setting
@@ -85,6 +87,7 @@ struct config_uint_setting
    bool def_enable;
    unsigned def;
    bool handle;
+   enum rarch_override_setting override;
 };
 
 struct config_float_setting
@@ -94,6 +97,7 @@ struct config_float_setting
    bool def_enable;
    float def;
    bool handle;
+   enum rarch_override_setting override;
 };
 
 struct config_array_setting
@@ -103,6 +107,7 @@ struct config_array_setting
    bool def_enable;
    const char *def;
    bool handle;
+   enum rarch_override_setting override;
 };
 
 struct config_path_setting
@@ -534,6 +539,9 @@ static enum menu_driver_enum MENU_DEFAULT_DRIVER = MENU_NULL;
 
 #define SETTING_ARRAY(key, configval, default_enable, default_setting, handle_setting) \
    GENERAL_SETTING(key, configval, default_enable, default_setting, struct config_array_setting, handle_setting)
+
+#define SETTING_OVERRIDE(override_setting) \
+   tmp[count-1].override = override_setting
 
 struct defaults g_defaults;
 static settings_t *configuration_settings = NULL;
@@ -1025,6 +1033,7 @@ static struct config_array_setting *populate_settings_array(settings_t *settings
 #ifdef HAVE_CHEEVOS
    SETTING_ARRAY("cheevos_username",         settings->arrays.cheevos_username, false, NULL, true);
    SETTING_ARRAY("cheevos_password",         settings->arrays.cheevos_password, false, NULL, true);
+   SETTING_ARRAY("cheevos_token",            settings->arrays.cheevos_token, false, NULL, true);
 #endif
    SETTING_ARRAY("video_context_driver",     settings->arrays.video_context_driver,   false, NULL, true);
    SETTING_ARRAY("audio_driver",             settings->arrays.audio_driver,           false, NULL, true);
@@ -1171,6 +1180,8 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
    SETTING_BOOL("automatically_add_content_to_playlist", &settings->bools.automatically_add_content_to_playlist, true, automatically_add_content_to_playlist, false);
    SETTING_BOOL("ui_companion_start_on_boot",    &settings->bools.ui_companion_start_on_boot, true, ui_companion_start_on_boot, false);
    SETTING_BOOL("ui_companion_enable",           &settings->bools.ui_companion_enable, true, ui_companion_enable, false);
+   SETTING_BOOL("ui_companion_toggle",           &settings->bools.ui_companion_toggle, false, ui_companion_toggle, false);
+   SETTING_BOOL("desktop_menu_enable",           &settings->bools.desktop_menu_enable, true, desktop_menu_enable, false);
    SETTING_BOOL("video_gpu_record",              &settings->bools.video_gpu_record, true, gpu_record, false);
    SETTING_BOOL("input_remap_binds_enable",      &settings->bools.input_remap_binds_enable, true, true, false);
    SETTING_BOOL("all_users_control_menu",        &settings->bools.input_all_users_control_menu, true, all_users_control_menu, false);
@@ -1181,6 +1192,7 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
    SETTING_BOOL("netplay_allow_slaves",          &settings->bools.netplay_allow_slaves, true, netplay_allow_slaves, false);
    SETTING_BOOL("netplay_require_slaves",        &settings->bools.netplay_require_slaves, true, netplay_require_slaves, false);
    SETTING_BOOL("netplay_stateless_mode",        &settings->bools.netplay_stateless_mode, true, netplay_stateless_mode, false);
+   SETTING_OVERRIDE(RARCH_OVERRIDE_SETTING_NETPLAY_STATELESS_MODE);
    SETTING_BOOL("netplay_use_mitm_server",       &settings->bools.netplay_use_mitm_server, true, netplay_use_mitm_server, false);
    SETTING_BOOL("netplay_request_device_p1",     &settings->bools.netplay_request_devices[0], true, false, false);
    SETTING_BOOL("netplay_request_device_p2",     &settings->bools.netplay_request_devices[1], true, false, false);
@@ -1206,10 +1218,13 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
    SETTING_BOOL("builtin_mediaplayer_enable",    &settings->bools.multimedia_builtin_mediaplayer_enable, false, false /* TODO */, false);
    SETTING_BOOL("builtin_imageviewer_enable",    &settings->bools.multimedia_builtin_imageviewer_enable, true, true, false);
    SETTING_BOOL("fps_show",                      &settings->bools.video_fps_show, true, false, false);
+   SETTING_BOOL("statistics_show",               &settings->bools.video_statistics_show, true, false, false);
    SETTING_BOOL("framecount_show",               &settings->bools.video_framecount_show, true, true, false);
    SETTING_BOOL("ui_menubar_enable",             &settings->bools.ui_menubar_enable, true, true, false);
    SETTING_BOOL("suspend_screensaver_enable",    &settings->bools.ui_suspend_screensaver_enable, true, true, false);
    SETTING_BOOL("rewind_enable",                 &settings->bools.rewind_enable, true, rewind_enable, false);
+   SETTING_BOOL("run_ahead_enabled",             &settings->bools.run_ahead_enabled, true, false, false);
+   SETTING_BOOL("run_ahead_secondary_instance",  &settings->bools.run_ahead_secondary_instance, true, false, false);
    SETTING_BOOL("audio_sync",                    &settings->bools.audio_sync, true, audio_sync, false);
    SETTING_BOOL("video_shader_enable",           &settings->bools.video_shader_enable, true, shader_enable, false);
    SETTING_BOOL("video_shader_watch_files",      &settings->bools.video_shader_watch_files, true, video_shader_watch_files, false);
@@ -1232,6 +1247,7 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
    SETTING_BOOL("video_vsync",                   &settings->bools.video_vsync, true, vsync, false);
    SETTING_BOOL("video_hard_sync",               &settings->bools.video_hard_sync, true, hard_sync, false);
    SETTING_BOOL("video_black_frame_insertion",   &settings->bools.video_black_frame_insertion, true, black_frame_insertion, false);
+   SETTING_BOOL("crt_switch_resolution",  		 &settings->bools.crt_switch_resolution, true, crt_switch_resolution, false); 
    SETTING_BOOL("video_disable_composition",     &settings->bools.video_disable_composition, true, disable_composition, false);
    SETTING_BOOL("pause_nonactive",               &settings->bools.pause_nonactive, true, pause_nonactive, false);
    SETTING_BOOL("video_gpu_screenshot",          &settings->bools.video_gpu_screenshot, true, gpu_screenshot, false);
@@ -1239,6 +1255,7 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
    SETTING_BOOL("keyboard_gamepad_enable",       &settings->bools.input_keyboard_gamepad_enable, true, true, false);
    SETTING_BOOL("core_set_supports_no_game_enable", &settings->bools.set_supports_no_game_enable, true, true, false);
    SETTING_BOOL("audio_enable",                  &settings->bools.audio_enable, true, audio_enable, false);
+   SETTING_BOOL("audio_enable_menu",             &settings->bools.audio_enable_menu, true, false, false);
    SETTING_BOOL("audio_mute_enable",             audio_get_bool_ptr(AUDIO_ACTION_MUTE_ENABLE), true, false, false);
    SETTING_BOOL("audio_mixer_mute_enable",       audio_get_bool_ptr(AUDIO_ACTION_MIXER_MUTE_ENABLE), true, false, false);
    SETTING_BOOL("location_allow",                &settings->bools.location_allow, true, false, false);
@@ -1299,10 +1316,14 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
 #ifdef HAVE_LIBRETRODB
    SETTING_BOOL("content_show_add",              &settings->bools.menu_content_show_add, true, content_show_add, false);
 #endif
+   SETTING_BOOL("content_show_playlists",        &settings->bools.menu_content_show_playlists, true, content_show_playlists, false);
    SETTING_BOOL("menu_show_load_core",           &settings->bools.menu_show_load_core, true, menu_show_load_core, false);
    SETTING_BOOL("menu_show_load_content",        &settings->bools.menu_show_load_content, true, menu_show_load_content, false);
    SETTING_BOOL("menu_show_information",         &settings->bools.menu_show_information, true, menu_show_information, false);
    SETTING_BOOL("menu_show_configurations",      &settings->bools.menu_show_configurations, true, menu_show_configurations, false);
+   SETTING_BOOL("menu_show_latency",      &settings->bools.menu_show_latency, true, true, false);
+   SETTING_BOOL("menu_show_rewind",      &settings->bools.menu_show_rewind, true, true, false);
+   SETTING_BOOL("menu_show_overlays",      &settings->bools.menu_show_overlays, true, true, false);
    SETTING_BOOL("menu_show_help",                &settings->bools.menu_show_help, true, menu_show_help, false);
    SETTING_BOOL("menu_show_quit_retroarch",      &settings->bools.menu_show_quit_retroarch, true, menu_show_quit_retroarch, false);
    SETTING_BOOL("menu_show_reboot",              &settings->bools.menu_show_reboot, true, menu_show_reboot, false);
@@ -1317,8 +1338,14 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
 #ifdef HAVE_MATERIALUI
    SETTING_BOOL("materialui_icons_enable",       &settings->bools.menu_materialui_icons_enable, true, materialui_icons_enable, false);
 #endif
+#ifdef HAVE_RGUI
+   SETTING_BOOL("rgui_background_filler_thickness_enable",     &settings->bools.menu_rgui_background_filler_thickness_enable, true, true, false);
+   SETTING_BOOL("rgui_border_filler_thickness_enable",     &settings->bools.menu_rgui_border_filler_thickness_enable, true, true, false);
+   SETTING_BOOL("rgui_border_filler_enable",     &settings->bools.menu_rgui_border_filler_enable, true, true, false);
+#endif
 #ifdef HAVE_XMB
    SETTING_BOOL("xmb_shadows_enable",            &settings->bools.menu_xmb_shadows_enable, true, xmb_shadows_enable, false);
+   SETTING_BOOL("xmb_vertical_thumbnails",       &settings->bools.menu_xmb_vertical_thumbnails, true, xmb_vertical_thumbnails, false);
 #endif
 #endif
 #ifdef HAVE_CHEEVOS
@@ -1326,10 +1353,11 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
    SETTING_BOOL("cheevos_test_unofficial",      &settings->bools.cheevos_test_unofficial, true, false, false);
    SETTING_BOOL("cheevos_hardcore_mode_enable", &settings->bools.cheevos_hardcore_mode_enable, true, false, false);
    SETTING_BOOL("cheevos_leaderboards_enable",  &settings->bools.cheevos_leaderboards_enable, true, false, false);
+   SETTING_BOOL("cheevos_verbose_enable",       &settings->bools.cheevos_verbose_enable, true, false, false);
+   SETTING_BOOL("cheevos_auto_screenshot",      &settings->bools.cheevos_auto_screenshot, true, false, false);
 #ifdef HAVE_XMB
    SETTING_BOOL("cheevos_badges_enable",        &settings->bools.cheevos_badges_enable, true, false, false);
 #endif
-   SETTING_BOOL("cheevos_verbose_enable",       &settings->bools.cheevos_verbose_enable, true, false, false);
 #endif
 #ifdef HAVE_OVERLAY
    SETTING_BOOL("input_overlay_enable",         &settings->bools.input_overlay_enable, true, config_overlay_enable_default(), false);
@@ -1343,9 +1371,6 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
 #endif
 #ifdef HAVE_NETWORKGAMEPAD
    SETTING_BOOL("network_remote_enable",        &settings->bools.network_remote_enable, false, false /* TODO */, false);
-#endif
-#ifdef HAVE_KEYMAPPER
-   SETTING_BOOL("keymapper_enable",       &settings->bools.keymapper_enable, true, true /* TODO */, false);
 #endif
 #ifdef HAVE_NETWORKING
    SETTING_BOOL("netplay_nat_traversal",        &settings->bools.netplay_nat_traversal, true, true, false);
@@ -1451,9 +1476,6 @@ static struct config_uint_setting *populate_settings_uint(settings_t *settings, 
 #ifdef HAVE_NETWORKGAMEPAD
    SETTING_UINT("network_remote_base_port",     &settings->uints.network_remote_base_port, true, network_remote_base_port, false);
 #endif
-#ifdef HAVE_KEYMAPPER
-   SETTING_UINT("keymapper_port",               &settings->uints.keymapper_port, true, 0, false);
-#endif
 #ifdef GEKKO
    SETTING_UINT("video_viwidth",                &settings->uints.video_viwidth, true, video_viwidth, false);
 #endif
@@ -1461,8 +1483,10 @@ static struct config_uint_setting *populate_settings_uint(settings_t *settings, 
    SETTING_UINT("dpi_override_value",           &settings->uints.menu_dpi_override_value, true, menu_dpi_override_value, false);
    SETTING_UINT("menu_thumbnails",              &settings->uints.menu_thumbnails, true, menu_thumbnails_default, false);
 #ifdef HAVE_XMB
+   SETTING_UINT("menu_left_thumbnails",         &settings->uints.menu_left_thumbnails, true, menu_left_thumbnails_default, false);
    SETTING_UINT("xmb_alpha_factor",             &settings->uints.menu_xmb_alpha_factor, true, xmb_alpha_factor, false);
    SETTING_UINT("xmb_scale_factor",             &settings->uints.menu_xmb_scale_factor, true, xmb_scale_factor, false);
+   SETTING_UINT("xmb_layout",                   &settings->uints.menu_xmb_layout, true, xmb_menu_layout, false);
    SETTING_UINT("xmb_theme",                    &settings->uints.menu_xmb_theme, true, xmb_icon_theme, false);
    SETTING_UINT("xmb_menu_color_theme",         &settings->uints.menu_xmb_color_theme, true, xmb_theme, false);
    SETTING_UINT("menu_font_color_red",          &settings->uints.menu_font_color_red, true, menu_font_color_red, false);
@@ -1474,6 +1498,7 @@ static struct config_uint_setting *populate_settings_uint(settings_t *settings, 
 #endif
    SETTING_UINT("audio_out_rate",               &settings->uints.audio_out_rate, true, out_rate, false);
    SETTING_UINT("custom_viewport_width",        &settings->video_viewport_custom.width, false, 0 /* TODO */, false);
+   SETTING_UINT("crt_switch_resolution_super",  &settings->uints.crt_switch_resolution_super,      true, crt_switch_resolution_super, false);
    SETTING_UINT("custom_viewport_height",       &settings->video_viewport_custom.height, false, 0 /* TODO */, false);
    SETTING_UINT("custom_viewport_x",            (unsigned*)&settings->video_viewport_custom.x, false, 0 /* TODO */, false);
    SETTING_UINT("custom_viewport_y",            (unsigned*)&settings->video_viewport_custom.y, false, 0 /* TODO */, false);
@@ -1486,6 +1511,7 @@ static struct config_uint_setting *populate_settings_uint(settings_t *settings, 
    SETTING_UINT("aspect_ratio_index",           &settings->uints.video_aspect_ratio_idx, true, aspect_ratio_idx, false);
 #ifdef HAVE_NETWORKING
    SETTING_UINT("netplay_ip_port",              &settings->uints.netplay_port,         true, RARCH_DEFAULT_PORT, false);
+   SETTING_OVERRIDE(RARCH_OVERRIDE_SETTING_NETPLAY_IP_PORT);
    SETTING_UINT("netplay_input_latency_frames_min",&settings->uints.netplay_input_latency_frames_min, true, 0, false);
    SETTING_UINT("netplay_input_latency_frames_range",&settings->uints.netplay_input_latency_frames_range, true, 0, false);
    SETTING_UINT("netplay_share_digital",        &settings->uints.netplay_share_digital, true, netplay_share_digital, false);
@@ -1501,6 +1527,8 @@ static struct config_uint_setting *populate_settings_uint(settings_t *settings, 
    SETTING_UINT("video_msg_bgcolor_green",        &settings->uints.video_msg_bgcolor_green, true, message_bgcolor_green, false);
    SETTING_UINT("video_msg_bgcolor_blue",        &settings->uints.video_msg_bgcolor_blue, true, message_bgcolor_blue, false);
 
+   SETTING_UINT("run_ahead_frames",           &settings->uints.run_ahead_frames, true, 1,  false);
+
    *size = count;
 
    return tmp;
@@ -1509,11 +1537,12 @@ static struct config_uint_setting *populate_settings_uint(settings_t *settings, 
 static struct config_int_setting *populate_settings_int(settings_t *settings, int *size)
 {
    unsigned count                     = 0;
-   struct config_int_setting  *tmp    = (struct config_int_setting*)malloc((*size + 1) * sizeof(struct config_int_setting));
+   struct config_int_setting  *tmp    = (struct config_int_setting*)calloc((*size + 1), sizeof(struct config_int_setting));
 
    SETTING_INT("state_slot",                   &settings->ints.state_slot, false, 0 /* TODO */, false);
 #ifdef HAVE_NETWORKING
    SETTING_INT("netplay_check_frames",         &settings->ints.netplay_check_frames, true, netplay_check_frames, false);
+   SETTING_OVERRIDE(RARCH_OVERRIDE_SETTING_NETPLAY_CHECK_FRAMES);
 #endif
 #ifdef HAVE_WASAPI
    SETTING_INT("audio_wasapi_sh_buffer_length", &settings->ints.audio_wasapi_sh_buffer_length, true, wasapi_sh_buffer_length, false);
@@ -1699,6 +1728,7 @@ static void config_set_defaults(void)
 #ifdef HAVE_CHEEVOS
    *settings->arrays.cheevos_username                 = '\0';
    *settings->arrays.cheevos_password                 = '\0';
+   *settings->arrays.cheevos_token                    = '\0';
 #endif
 
    input_config_reset();
@@ -1727,8 +1757,7 @@ static void config_set_defaults(void)
    {
       settings->uints.input_joypad_map[i] = i;
       settings->uints.input_analog_dpad_mode[i] = ANALOG_DPAD_NONE;
-      if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_LIBRETRO_DEVICE, &i))
-         input_config_set_device(i, RETRO_DEVICE_JOYPAD);
+      input_config_set_device(i, RETRO_DEVICE_JOYPAD);
       settings->uints.input_mouse_index[i] = 0;
    }
 
@@ -1742,8 +1771,7 @@ static void config_set_defaults(void)
       dir_clear(RARCH_DIR_SAVESTATE);
 
    *settings->paths.path_libretro_info = '\0';
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_LIBRETRO_DIRECTORY, NULL))
-      *settings->paths.directory_libretro = '\0';
+   *settings->paths.directory_libretro = '\0';
    *settings->paths.directory_cursor = '\0';
    *settings->paths.directory_resampler = '\0';
    *settings->paths.directory_screenshot = '\0';
@@ -1764,12 +1792,9 @@ static void config_set_defaults(void)
    *settings->paths.directory_video_filter = '\0';
    *settings->paths.directory_audio_filter = '\0';
 
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_UPS_PREF, NULL))
-      rarch_ctl(RARCH_CTL_UNSET_UPS_PREF, NULL);
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_BPS_PREF, NULL))
-      rarch_ctl(RARCH_CTL_UNSET_BPS_PREF, NULL);
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_IPS_PREF, NULL))
-      rarch_ctl(RARCH_CTL_UNSET_IPS_PREF, NULL);
+   rarch_ctl(RARCH_CTL_UNSET_UPS_PREF, NULL);
+   rarch_ctl(RARCH_CTL_UNSET_BPS_PREF, NULL);
+   rarch_ctl(RARCH_CTL_UNSET_IPS_PREF, NULL);
 
    {
       global_t *global =  global_get_ptr();
@@ -1897,8 +1922,14 @@ static void config_set_defaults(void)
             g_defaults.dirs[DEFAULT_DIR_MENU_CONFIG],
             sizeof(settings->paths.directory_menu_config));
 #if TARGET_OS_IPHONE
-      path_set(RARCH_PATH_CONFIG,
-            settings->paths.directory_menu_config);
+      {
+         char *config_file_path        = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
+         size_t config_file_path_size  = PATH_MAX_LENGTH * sizeof(char);
+
+         fill_pathname_join(config_file_path, settings->paths.directory_menu_config, file_path_str(FILE_PATH_MAIN_CONFIG), config_file_path_size);
+         path_set(RARCH_PATH_CONFIG,
+               config_file_path);
+      }
 #endif
    }
 
@@ -1912,12 +1943,10 @@ static void config_set_defaults(void)
             g_defaults.dirs[DEFAULT_DIR_AUTOCONFIG],
             sizeof(settings->paths.directory_autoconfig));
 
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_STATE_PATH, NULL) &&
-         !string_is_empty(g_defaults.dirs[DEFAULT_DIR_SAVESTATE]))
+   if (!string_is_empty(g_defaults.dirs[DEFAULT_DIR_SAVESTATE]))
       dir_set(RARCH_DIR_SAVESTATE, g_defaults.dirs[DEFAULT_DIR_SAVESTATE]);
 
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_SAVE_PATH, NULL) &&
-         !string_is_empty(g_defaults.dirs[DEFAULT_DIR_SRAM]))
+   if (!string_is_empty(g_defaults.dirs[DEFAULT_DIR_SRAM]))
       dir_set(RARCH_DIR_SAVEFILE, g_defaults.dirs[DEFAULT_DIR_SRAM]);
 
    if (!string_is_empty(g_defaults.dirs[DEFAULT_DIR_SYSTEM]))
@@ -2365,9 +2394,6 @@ static bool config_load_file(const char *path, bool set_defaults,
    unsigned msg_color                              = 0;
    config_file_t *conf                             = NULL;
    char *override_username                         = NULL;
-#ifdef HAVE_NETWORKING
-   char *override_netplay_ip_address               = NULL;
-#endif
    const char *path_core                           = NULL;
    const char *path_config                         = NULL;
    const char *shader_ext                          = NULL;
@@ -2445,11 +2471,6 @@ static bool config_load_file(const char *path, bool set_defaults,
    if (rarch_ctl(RARCH_CTL_HAS_SET_USERNAME, NULL))
       override_username = strdup(settings->paths.username);
 
-#ifdef HAVE_NETWORKING
-   if (retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_NETPLAY_IP_ADDRESS, NULL))
-      override_netplay_ip_address = strdup(settings->paths.netplay_server);
-#endif
-
    /* Boolean settings */
 
    for (i = 0; i < (unsigned)bool_settings_size; i++)
@@ -2472,15 +2493,12 @@ static bool config_load_file(const char *path, bool set_defaults,
          settings->bools.network_remote_enable_user[i] = tmp_bool;
    }
 #endif
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_VERBOSITY, NULL))
+   if (config_get_bool(conf, "log_verbosity", &tmp_bool))
    {
-      if (config_get_bool(conf, "log_verbosity", &tmp_bool))
-      {
-         if (tmp_bool)
-            verbosity_enable();
-         else
-            verbosity_disable();
-      }
+      if (tmp_bool)
+         verbosity_enable();
+      else
+         verbosity_disable();
    }
    {
       char tmp[64];
@@ -2513,14 +2531,6 @@ static bool config_load_file(const char *path, bool set_defaults,
          *uint_settings[i].ptr = tmp;
    }
 
-#ifdef HAVE_NETWORKING
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_NETPLAY_STATELESS_MODE, NULL))
-      CONFIG_GET_BOOL_BASE(conf, settings, bools.netplay_stateless_mode, "netplay_stateless_mode");
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_NETPLAY_CHECK_FRAMES, NULL))
-      CONFIG_GET_INT_BASE(conf, settings, ints.netplay_check_frames, "netplay_check_frames");
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_NETPLAY_IP_PORT, NULL))
-      CONFIG_GET_INT_BASE(conf, settings, uints.netplay_port, "netplay_ip_port");
-#endif
    for (i = 0; i < MAX_USERS; i++)
    {
       char buf[64];
@@ -2536,11 +2546,8 @@ static bool config_load_file(const char *path, bool set_defaults,
       snprintf(buf, sizeof(buf), "input_player%u_mouse_index", i + 1);
       CONFIG_GET_INT_BASE(conf, settings, uints.input_mouse_index[i], buf);
 
-      if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_LIBRETRO_DEVICE, &i))
-      {
-         snprintf(buf, sizeof(buf), "input_libretro_device_p%u", i + 1);
-         CONFIG_GET_INT_BASE(conf, settings, uints.input_libretro_device[i], buf);
-      }
+      snprintf(buf, sizeof(buf), "input_libretro_device_p%u", i + 1);
+      CONFIG_GET_INT_BASE(conf, settings, uints.input_libretro_device[i], buf);
    }
 
    /* LED map for use by the led driver */
@@ -2606,11 +2613,8 @@ static bool config_load_file(const char *path, bool set_defaults,
          strlcpy(path_settings[i].ptr, tmp_str, PATH_MAX_LENGTH);
    }
 
-   if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_LIBRETRO_DIRECTORY, NULL))
-   {
-      if (config_get_path(conf, "libretro_directory", tmp_str, path_size))
-            strlcpy(settings->paths.directory_libretro, tmp_str, sizeof(settings->paths.directory_libretro));
-   }
+   if (config_get_path(conf, "libretro_directory", tmp_str, path_size))
+      strlcpy(settings->paths.directory_libretro, tmp_str, sizeof(settings->paths.directory_libretro));
 
 #ifndef HAVE_DYNAMIC
    if (config_get_path(conf, "libretro_path", tmp_str, path_size))
@@ -2630,16 +2634,6 @@ static bool config_load_file(const char *path, bool set_defaults,
             sizeof(settings->paths.username));
       free(override_username);
    }
-
-#ifdef HAVE_NETWORKING
-   if (retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_NETPLAY_IP_ADDRESS, NULL))
-   {
-      strlcpy(settings->paths.netplay_server,
-            override_netplay_ip_address,
-            sizeof(settings->paths.netplay_server));
-      free(override_netplay_ip_address);
-   }
-#endif
 
    if (settings->uints.video_hard_sync_frames > 3)
       settings->uints.video_hard_sync_frames = 3;
@@ -2949,7 +2943,7 @@ bool config_load_override(void)
    config_file_t *new_conf                = NULL;
    bool should_append                     = false;
    rarch_system_info_t *system            = runloop_get_system_info();
-   const char *core_name                  = system ? 
+   const char *core_name                  = system ?
       system->info.library_name : NULL;
    const char *game_name                  = path_basename(path_get(RARCH_PATH_BASENAME));
 
@@ -3037,7 +3031,7 @@ bool config_load_override(void)
    if (!should_append)
       goto error;
 
-   /* Re-load the configuration with any overrides 
+   /* Re-load the configuration with any overrides
     * that might have been found */
    buf[0] = '\0';
 
@@ -3122,7 +3116,7 @@ bool config_unload_override(void)
 bool config_load_remap(void)
 {
    size_t path_size                       = PATH_MAX_LENGTH * sizeof(char);
-   char *remap_directory                  = NULL; 
+   char *remap_directory                  = NULL;
    char *core_path                        = NULL;
    char *game_path                        = NULL;
    config_file_t *new_conf                = NULL;
@@ -3142,12 +3136,12 @@ bool config_load_remap(void)
    /* path to the directory containing retroarch.cfg (prefix)    */
    remap_directory                        = (char*)
       malloc(PATH_MAX_LENGTH * sizeof(char));
-   /* final path for core-specific configuration (prefix+suffix) */    
+   /* final path for core-specific configuration (prefix+suffix) */
    core_path                              = (char*)
       malloc(PATH_MAX_LENGTH * sizeof(char));
    /* final path for game-specific configuration (prefix+suffix) */
    game_path                              = (char*)
-      malloc(PATH_MAX_LENGTH * sizeof(char));          
+      malloc(PATH_MAX_LENGTH * sizeof(char));
    remap_directory[0] = core_path[0] = game_path[0] = '\0';
 
    strlcpy(remap_directory,
@@ -3249,7 +3243,7 @@ bool config_load_shader_preset(void)
    char *parent_path                      = NULL;
    settings_t *settings                   = config_get_ptr();
    rarch_system_info_t *system            = runloop_get_system_info();
-   const char *core_name                  = system 
+   const char *core_name                  = system
       ? system->info.library_name : NULL;
    const char *game_name                  = path_basename(path_get(RARCH_PATH_BASENAME));
 
@@ -3534,14 +3528,14 @@ static void save_keybind_mbutton(config_file_t *conf,
       const char *base,
       const struct retro_keybind *bind, bool save_empty)
 {
-	char key[64];
+   char key[64];
 
-	key[0] = '\0';
+   key[0] = '\0';
 
-	fill_pathname_join_delim_concat(key, prefix,
-		base, '_', "_mbtn", sizeof(key));
+   fill_pathname_join_delim_concat(key, prefix,
+      base, '_', "_mbtn", sizeof(key));
 
-	switch ( bind->mbutton )
+   switch ( bind->mbutton )
    {
       case RETRO_DEVICE_ID_MOUSE_LEFT:
          config_set_uint64(conf, key, 1);
@@ -3787,8 +3781,7 @@ bool config_save_autoconf_profile(const char *path, unsigned user)
 error:
    free(buf);
    free(autoconf_file);
-   if (path_new)
-      free(path_new);
+   free(path_new);
    return false;
 }
 
@@ -3864,9 +3857,11 @@ bool config_save_file(const char *path)
    if (array_settings && (array_settings_size > 0))
    {
       for (i = 0; i < (unsigned)array_settings_size; i++)
-         config_set_string(conf,
-               array_settings[i].ident,
-               array_settings[i].ptr);
+         if (!array_settings[i].override ||
+             !retroarch_override_setting_is_set(array_settings[i].override, NULL))
+            config_set_string(conf,
+                  array_settings[i].ident,
+                  array_settings[i].ptr);
 
       free(array_settings);
    }
@@ -3875,9 +3870,11 @@ bool config_save_file(const char *path)
    if (float_settings && (float_settings_size > 0))
    {
       for (i = 0; i < (unsigned)float_settings_size; i++)
-         config_set_float(conf,
-               float_settings[i].ident,
-               *float_settings[i].ptr);
+         if (!float_settings[i].override ||
+             !retroarch_override_setting_is_set(float_settings[i].override, NULL))
+            config_set_float(conf,
+                  float_settings[i].ident,
+                  *float_settings[i].ptr);
 
       free(float_settings);
    }
@@ -3886,9 +3883,11 @@ bool config_save_file(const char *path)
    if (int_settings && (int_settings_size > 0))
    {
       for (i = 0; i < (unsigned)int_settings_size; i++)
-         config_set_int(conf,
-               int_settings[i].ident,
-               *int_settings[i].ptr);
+         if (!int_settings[i].override ||
+             !retroarch_override_setting_is_set(int_settings[i].override, NULL))
+            config_set_int(conf,
+                  int_settings[i].ident,
+                  *int_settings[i].ptr);
 
       free(int_settings);
    }
@@ -3896,9 +3895,11 @@ bool config_save_file(const char *path)
    if (uint_settings && (uint_settings_size > 0))
    {
       for (i = 0; i < (unsigned)uint_settings_size; i++)
-         config_set_int(conf,
-               uint_settings[i].ident,
-               *uint_settings[i].ptr);
+         if (!uint_settings[i].override ||
+             !retroarch_override_setting_is_set(uint_settings[i].override, NULL))
+            config_set_int(conf,
+                  uint_settings[i].ident,
+                  *uint_settings[i].ptr);
 
       free(uint_settings);
    }
@@ -3925,8 +3926,10 @@ bool config_save_file(const char *path)
    if (bool_settings && (bool_settings_size > 0))
    {
       for (i = 0; i < (unsigned)bool_settings_size; i++)
-         config_set_bool(conf, bool_settings[i].ident,
-               *bool_settings[i].ptr);
+         if (!bool_settings[i].override ||
+             !retroarch_override_setting_is_set(bool_settings[i].override, NULL))
+            config_set_bool(conf, bool_settings[i].ident,
+                  *bool_settings[i].ptr);
 
       free(bool_settings);
    }
@@ -3943,6 +3946,7 @@ bool config_save_file(const char *path)
    }
 #endif
 
+   /* Verbosity isn't in bool_settings since it needs to be loaded differently */
    if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_VERBOSITY, NULL))
    {
       config_set_bool(conf, "log_verbosity",
@@ -4189,28 +4193,28 @@ bool config_save_overrides(int override_type)
          char cfg[64];
 
          cfg[0] = '\0';
-         if (settings->uints.input_device[i] 
+         if (settings->uints.input_device[i]
                != overrides->uints.input_device[i])
          {
             snprintf(cfg, sizeof(cfg), "input_device_p%u", i + 1);
             config_set_int(conf, cfg, overrides->uints.input_device[i]);
          }
 
-         if (settings->uints.input_joypad_map[i] 
+         if (settings->uints.input_joypad_map[i]
                != overrides->uints.input_joypad_map[i])
          {
             snprintf(cfg, sizeof(cfg), "input_player%u_joypad_index", i + 1);
             config_set_int(conf, cfg, overrides->uints.input_joypad_map[i]);
          }
 
-         if (settings->uints.input_libretro_device[i] 
+         if (settings->uints.input_libretro_device[i]
                != overrides->uints.input_libretro_device[i])
          {
             snprintf(cfg, sizeof(cfg), "input_libretro_device_p%u", i + 1);
             config_set_int(conf, cfg, overrides->uints.input_libretro_device[i]);
          }
 
-         if (settings->uints.input_analog_dpad_mode[i] 
+         if (settings->uints.input_analog_dpad_mode[i]
                != overrides->uints.input_analog_dpad_mode[i])
          {
             snprintf(cfg, sizeof(cfg), "input_player%u_analog_dpad_mode", i + 1);

@@ -337,6 +337,14 @@ enum
    return (RetroArch_iOS*)[[UIApplication sharedApplication] delegate];
 }
 
+-(NSString*)documentsDirectory {
+    if ( _documentsDirectory == nil ) {
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        _documentsDirectory = paths.firstObject;
+    }
+    return _documentsDirectory;
+}
+
 - (void)applicationDidFinishLaunching:(UIApplication *)application
 {
    char arguments[]   = "retroarch";
@@ -377,6 +385,7 @@ enum
     extern bool apple_gamecontroller_joypad_init(void *data);
     apple_gamecontroller_joypad_init(NULL);
 #endif
+
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application
@@ -689,7 +698,7 @@ static void ui_companion_cocoatouch_msg_queue_push(const char *msg,
    }
 }
 
-const ui_companion_driver_t ui_companion_cocoatouch = {
+ui_companion_driver_t ui_companion_cocoatouch = {
    ui_companion_cocoatouch_init,
    ui_companion_cocoatouch_deinit,
    ui_companion_cocoatouch_iterate,

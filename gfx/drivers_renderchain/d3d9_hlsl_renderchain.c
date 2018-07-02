@@ -14,6 +14,8 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define CINTERFACE
+
 #include <string.h>
 #include <retro_inline.h>
 #include <retro_math.h>
@@ -23,10 +25,12 @@
 #include "../drivers/d3d.h"
 #include "../../defines/d3d_defines.h"
 #include "../common/d3d_common.h"
+#include "../common/d3d9_common.h"
 
 #include "../video_driver.h"
 
 #include "../../configuration.h"
+#include "../../retroarch.h"
 #include "../../verbosity.h"
 
 typedef struct hlsl_d3d9_renderchain
@@ -47,8 +51,8 @@ static void hlsl_d3d9_renderchain_clear(void *data)
 {
    hlsl_d3d9_renderchain_t *chain = (hlsl_d3d9_renderchain_t*)data;
 
-   d3d_texture_free(chain->tex);
-   d3d_vertex_buffer_free(chain->vertex_buf, chain->vertex_decl);
+   d3d9_texture_free(chain->tex);
+   d3d9_vertex_buffer_free(chain->vertex_buf, chain->vertex_decl);
 }
 
 static bool hlsl_d3d9_renderchain_init_shader_fvf(void *data, void *pass_data)
@@ -59,25 +63,25 @@ static bool hlsl_d3d9_renderchain_init_shader_fvf(void *data, void *pass_data)
       { 0, 2 * sizeof(float), D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
       D3DDECL_END()
    };
-   d3d_video_t *d3d               = (d3d_video_t*)data;
-   d3d_video_t *pass              = (d3d_video_t*)data;
+   d3d9_video_t *d3d               = (d3d9_video_t*)data;
+   d3d9_video_t *pass              = (d3d9_video_t*)data;
    hlsl_d3d9_renderchain_t *chain = (hlsl_d3d9_renderchain_t*)
       d3d->renderchain_data;
 
    (void)pass_data;
 
-   return d3d_vertex_declaration_new(d3d->dev,
+   return d3d9_vertex_declaration_new(d3d->dev,
          VertexElements, (void**)&chain->vertex_decl);
 }
 
 static bool hlsl_d3d9_renderchain_create_first_pass(void *data,
       const video_info_t *info)
 {
-   d3d_video_t       *d3d         = (d3d_video_t*)data;
+   d3d9_video_t       *d3d         = (d3d9_video_t*)data;
    hlsl_d3d9_renderchain_t *chain = (hlsl_d3d9_renderchain_t*)
       d3d->renderchain_data;
 
-   chain->vertex_buf        = d3d_vertex_buffer_new(
+   chain->vertex_buf        = d3d9_vertex_buffer_new(
          d3d->dev, 4 * sizeof(Vertex),
          D3DUSAGE_WRITEONLY,
 #ifdef _XBOX
@@ -91,19 +95,19 @@ static bool hlsl_d3d9_renderchain_create_first_pass(void *data,
    if (!chain->vertex_buf)
       return false;
 
-   chain->tex = d3d_texture_new(d3d->dev, NULL,
+   chain->tex = d3d9_texture_new(d3d->dev, NULL,
          chain->tex_w, chain->tex_h, 1, 0,
          info->rgb32 ? 
-         d3d_get_xrgb8888_format() : d3d_get_rgb565_format(),
+         d3d9_get_xrgb8888_format() : d3d9_get_rgb565_format(),
          0, 0, 0, 0, NULL, NULL, false);
 
    if (!chain->tex)
       return false;
 
-   d3d_set_sampler_address_u(d3d->dev, D3DSAMP_ADDRESSU, D3DTADDRESS_BORDER);
-   d3d_set_sampler_address_v(d3d->dev, D3DSAMP_ADDRESSV, D3DTADDRESS_BORDER);
-   d3d_set_render_state(d3d->dev, D3DRS_CULLMODE, D3DCULL_NONE);
-   d3d_set_render_state(d3d->dev, D3DRS_ZENABLE, FALSE);
+   d3d9_set_sampler_address_u(d3d->dev, D3DSAMP_ADDRESSU, D3DTADDRESS_BORDER);
+   d3d9_set_sampler_address_v(d3d->dev, D3DSAMP_ADDRESSV, D3DTADDRESS_BORDER);
+   d3d9_set_render_state(d3d->dev, D3DRS_CULLMODE, D3DCULL_NONE);
+   d3d9_set_render_state(d3d->dev, D3DRS_ZENABLE, FALSE);
 
    if (!hlsl_d3d9_renderchain_init_shader_fvf(chain, chain))
       return false;
@@ -118,7 +122,7 @@ static void hlsl_d3d9_renderchain_set_vertices(
    video_shader_ctx_params_t params;
    video_shader_ctx_info_t shader_info;
    unsigned width, height;
-   d3d_video_t *d3d         = (d3d_video_t*)data;
+   d3d9_video_t *d3d         = (d3d9_video_t*)data;
    hlsl_d3d9_renderchain_t *chain = d3d ?
       (hlsl_d3d9_renderchain_t*)d3d->renderchain_data : NULL;
 
@@ -168,16 +172,16 @@ static void hlsl_d3d9_renderchain_set_vertices(
          vert[i].y      += 0.5f / ((float)chain->tex_h);
       }
 
-      verts = d3d_vertex_buffer_lock(chain->vertex_buf);
+      verts = d3d9_vertex_buffer_lock(chain->vertex_buf);
       memcpy(verts, vert, sizeof(vert));
-      d3d_vertex_buffer_unlock(chain->vertex_buf);
+      d3d9_vertex_buffer_unlock(chain->vertex_buf);
    }
 
    shader_info.data = d3d;
    shader_info.idx  = pass;
    shader_info.set_active = true;
 
-   video_shader_driver_use(shader_info);
+   video_shader_driver_use(&shader_info);
 
    params.data          = d3d;
    params.width         = vert_width;
@@ -193,32 +197,32 @@ static void hlsl_d3d9_renderchain_set_vertices(
    params.fbo_info      = NULL;
    params.fbo_info_cnt  = 0;
 
-   video_shader_driver_set_parameters(params);
+   video_shader_driver_set_parameters(&params);
 }
 
 static void hlsl_d3d9_renderchain_blit_to_texture(
       void *data, const void *frame,
       unsigned width, unsigned height, unsigned pitch)
 {
-   D3DLOCKED_RECT d3dlr;
+   D3DLOCKED_RECT d3dlr           = { 0, NULL };
    hlsl_d3d9_renderchain_t *chain = (hlsl_d3d9_renderchain_t*)data;
 
    if (chain->last_width != width || chain->last_height != height)
    {
-      d3d_lock_rectangle(chain->tex,
+      d3d9_lock_rectangle(chain->tex,
             0, &d3dlr, NULL, chain->tex_h, D3DLOCK_NOSYSLOCK);
-      d3d_lock_rectangle_clear(chain->tex,
+      d3d9_lock_rectangle_clear(chain->tex,
             0, &d3dlr, NULL, chain->tex_h, D3DLOCK_NOSYSLOCK);
    }
 
    /* Set the texture to NULL so D3D doesn't complain about it being in use... */
-   d3d_set_texture(chain->dev, 0, NULL);
+   d3d9_set_texture(chain->dev, 0, NULL);
 
-   if (d3d_lock_rectangle(chain->tex, 0, &d3dlr, NULL, 0, 0))
+   if (d3d9_lock_rectangle(chain->tex, 0, &d3dlr, NULL, 0, 0))
    {
-      d3d_texture_blit(chain->pixel_size, chain->tex,
+      d3d9_texture_blit(chain->pixel_size, chain->tex,
             &d3dlr, frame, width, height, pitch);
-      d3d_unlock_rectangle(chain->tex);
+      d3d9_unlock_rectangle(chain->tex);
    }
 }
 
@@ -238,7 +242,7 @@ static void hlsl_d3d9_renderchain_deinit_shader(void *data)
 
 static void hlsl_d3d9_renderchain_free(void *data)
 {
-   d3d_video_t *chain = (d3d_video_t*)data;
+   d3d9_video_t *chain = (d3d9_video_t*)data;
 
    if (!chain)
       return;
@@ -262,8 +266,7 @@ static bool hlsl_d3d9_renderchain_init_shader(void *data,
       void *renderchain_data)
 {
    video_shader_ctx_init_t init;
-   bool ret                       = false;
-   d3d_video_t        *d3d        = (d3d_video_t*)data;
+   d3d9_video_t        *d3d        = (d3d9_video_t*)data;
    settings_t *settings           = config_get_ptr();
    (void)renderchain_data;
 
@@ -273,13 +276,11 @@ static bool hlsl_d3d9_renderchain_init_shader(void *data,
    init.shader_type               = RARCH_SHADER_HLSL;
    init.data                      = data;
    init.path                      = retroarch_get_shader_preset();
-   init.shader                    = &hlsl_backend;
+   init.shader                    = NULL;
 
    RARCH_LOG("D3D]: Using HLSL shader backend.\n");
 
-   ret = video_shader_driver_init(&init);
-
-   return ret;
+   return video_shader_driver_init(&init);
 }
 
 static bool hlsl_d3d9_renderchain_init(void *data,
@@ -291,7 +292,7 @@ static bool hlsl_d3d9_renderchain_init(void *data,
       )
 {
    unsigned width, height;
-   d3d_video_t *d3d                   = (d3d_video_t*)data;
+   d3d9_video_t *d3d                   = (d3d9_video_t*)data;
    const video_info_t *video_info     = (const video_info_t*)_video_info;
    const struct LinkInfo *link_info   = (const struct LinkInfo*)info_data;
    hlsl_d3d9_renderchain_t *chain     = (hlsl_d3d9_renderchain_t*)
@@ -341,7 +342,7 @@ static bool hlsl_d3d9_renderchain_render(void *data, const void *frame,
 {
    unsigned i;
    unsigned width, height;
-   d3d_video_t      *d3d          = (d3d_video_t*)data;
+   d3d9_video_t      *d3d          = (d3d9_video_t*)data;
    settings_t *settings           = config_get_ptr();
    hlsl_d3d9_renderchain_t *chain = (hlsl_d3d9_renderchain_t*)d3d->renderchain_data;
    bool video_smooth              = settings->bools.video_smooth;
@@ -355,17 +356,17 @@ static bool hlsl_d3d9_renderchain_render(void *data, const void *frame,
    hlsl_d3d9_renderchain_set_vertices(d3d,
          1, frame_width, frame_height, chain->frame_count);
 
-   d3d_set_texture(chain->dev, 0, chain->tex);
-   d3d_set_viewports(chain->dev, &d3d->final_viewport);
-   d3d_set_sampler_minfilter(chain->dev, 0,
+   d3d9_set_texture(chain->dev, 0, chain->tex);
+   d3d9_set_viewports(chain->dev, &d3d->final_viewport);
+   d3d9_set_sampler_minfilter(chain->dev, 0,
          video_smooth ? D3DTEXF_LINEAR : D3DTEXF_POINT);
-   d3d_set_sampler_magfilter(chain->dev, 0,
+   d3d9_set_sampler_magfilter(chain->dev, 0,
          video_smooth ? D3DTEXF_LINEAR : D3DTEXF_POINT);
 
-   d3d_set_vertex_declaration(chain->dev, chain->vertex_decl);
+   d3d9_set_vertex_declaration(chain->dev, chain->vertex_decl);
    for (i = 0; i < 4; i++)
-      d3d_set_stream_source(chain->dev, i, chain->vertex_buf, 0, sizeof(Vertex));
-   d3d_draw_primitive(chain->dev, D3DPT_TRIANGLESTRIP, 0, 2);
+      d3d9_set_stream_source(chain->dev, i, chain->vertex_buf, 0, sizeof(Vertex));
+   d3d9_draw_primitive(chain->dev, D3DPT_TRIANGLESTRIP, 0, 2);
 
    return true;
 }
@@ -410,7 +411,7 @@ static void hlsl_d3d9_renderchain_viewport_info(
       void *data, struct video_viewport *vp)
 {
    unsigned width, height;
-   d3d_video_t *d3d = (d3d_video_t*)data;
+   d3d9_video_t *d3d = (d3d9_video_t*)data;
 
    if (!d3d || !vp)
       return;

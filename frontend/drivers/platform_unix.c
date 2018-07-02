@@ -54,9 +54,6 @@
 
 #ifdef ANDROID
 #include <sys/system_properties.h>
-#ifdef __arm__
-#include <machine/cpu-features.h>
-#endif
 #endif
 
 #include <boolean.h>
@@ -663,22 +660,14 @@ static bool make_proc_acpi_key_val(char **_ptr, char **_key, char **_val)
     return true;
 }
 
-#define ACPI_KEY_STATE                 0x10614a06U
-#define ACPI_KEY_PRESENT               0xc28ac046U
-#define ACPI_KEY_CHARGING_STATE        0x5ba13e29U
-#define ACPI_KEY_REMAINING_CAPACITY    0xf36952edU
-#define ACPI_KEY_DESIGN_CAPACITY       0x05e6488dU
-
 #define ACPI_VAL_CHARGING_DISCHARGING  0xf268327aU
-#define ACPI_VAL_CHARGING              0x095ee228U
-#define ACPI_VAL_YES                   0x0b88c316U
 #define ACPI_VAL_ONLINE                0x6842bf17U
 
 static void check_proc_acpi_battery(const char * node, bool * have_battery,
       bool * charging, int *seconds, int *percent)
 {
-   const char *base  = proc_acpi_battery_path;
    char path[1024];
+   const char *base  = proc_acpi_battery_path;
    ssize_t length    = 0;
    char         *ptr = NULL;
    char  *buf        = NULL;
@@ -710,33 +699,35 @@ static void check_proc_acpi_battery(const char * node, bool * have_battery,
 
    while (make_proc_acpi_key_val(&ptr, &key, &val))
    {
-      uint32_t key_hash = djb2_calculate(key);
-      uint32_t val_hash = djb2_calculate(val);
-
-      switch (key_hash)
+      if (string_is_equal(key, "present"))
       {
-         case ACPI_KEY_PRESENT:
-            if (val_hash == ACPI_VAL_YES)
-               *have_battery = true;
-            break;
-         case ACPI_KEY_CHARGING_STATE:
+         if (string_is_equal(val, "yes"))
+            *have_battery = true;
+      }
+      else if (string_is_equal(key, "charging state"))
+      {
+         if (string_is_equal(val, "charging"))
+            charge = true;
+         else
+         {
+            uint32_t val_hash = djb2_calculate(val);
+
             switch (val_hash)
             {
                case ACPI_VAL_CHARGING_DISCHARGING:
-               case ACPI_VAL_CHARGING:
                   charge = true;
                   break;
+               default:
+                  break;
             }
-            break;
-         case ACPI_KEY_REMAINING_CAPACITY:
-            {
-               char  *endptr = NULL;
-               const int cvt = (int)strtol(val, &endptr, 10);
+         }
+      }
+      else if (string_is_equal(key, "remaining capacity"))
+      {
+         char *endptr = NULL;
 
-               if (*endptr == ' ')
-                  remaining = cvt;
-            }
-            break;
+         if (endptr && *endptr == ' ')
+            remaining = (int)strtol(val, &endptr, 10);
       }
    }
 
@@ -744,20 +735,11 @@ static void check_proc_acpi_battery(const char * node, bool * have_battery,
 
    while (make_proc_acpi_key_val(&ptr, &key, &val))
    {
-      uint32_t key_hash = djb2_calculate(key);
+      char      *endptr = NULL;
 
-      switch (key_hash)
-      {
-         case ACPI_KEY_DESIGN_CAPACITY:
-            {
-               char  *endptr = NULL;
-               const int cvt = (int)strtol(val, &endptr, 10);
-
-               if (*endptr == ' ')
-                  maximum = cvt;
-            }
-            break;
-      }
+      if (string_is_equal(key, "design capacity"))
+         if (endptr && *endptr == ' ')
+            maximum = (int)strtol(val, &endptr, 10);
    }
 
    if ((maximum >= 0) && (remaining >= 0))
@@ -787,8 +769,8 @@ static void check_proc_acpi_battery(const char * node, bool * have_battery,
 
    if (choose)
    {
-      *seconds = secs;
-      *percent = pct;
+      *seconds  = secs;
+      *percent  = pct;
       *charging = charge;
    }
 
@@ -881,10 +863,9 @@ static void check_proc_acpi_ac_adapter(const char * node, bool *have_ac)
    ptr = &buf[0];
    while (make_proc_acpi_key_val(&ptr, &key, &val))
    {
-      uint32_t key_hash = djb2_calculate(key);
       uint32_t val_hash = djb2_calculate(val);
 
-      if (key_hash == ACPI_KEY_STATE &&
+      if (string_is_equal(key, "state") &&
             val_hash == ACPI_VAL_ONLINE)
          *have_ac = true;
    }
@@ -1174,57 +1155,40 @@ static enum frontend_powerstate frontend_unix_get_powerstate(
    return ret;
 }
 
-#define UNIX_ARCH_X86_64     0x23dea434U
-#define UNIX_ARCH_X86        0x0b88b8cbU
-#define UNIX_ARCH_ARM        0x0b885ea5U
-#define UNIX_ARCH_PPC64      0x1028cf52U
-#define UNIX_ARCH_MIPS       0x7c9aa25eU
-#define UNIX_ARCH_TILE       0x7c9e7873U
-#define UNIX_ARCH_AARCH64    0x191bfc0eU
-#define UNIX_ARCH_ARMV7B     0xf27015f4U
-#define UNIX_ARCH_ARMV7L     0xf27015feU
-#define UNIX_ARCH_ARMV6L     0xf27015ddU
-#define UNIX_ARCH_ARMV6B     0xf27015d3U
-#define UNIX_ARCH_ARMV5TEB   0x28612995U
-#define UNIX_ARCH_ARMV5TEL   0x4ecca435U
-
 static enum frontend_architecture frontend_unix_get_architecture(void)
 {
    struct utsname buffer;
-   uint32_t buffer_hash   = 0;
    const char *val        = NULL;
 
    if (uname(&buffer) != 0)
       return FRONTEND_ARCH_NONE;
 
    val         = buffer.machine;
-   buffer_hash = djb2_calculate(val);
 
-   switch (buffer_hash)
-   {
-      case UNIX_ARCH_AARCH64:
-         return FRONTEND_ARCH_ARMV8;
-      case UNIX_ARCH_ARMV7L:
-      case UNIX_ARCH_ARMV7B:
-         return FRONTEND_ARCH_ARMV7;
-      case UNIX_ARCH_ARMV6L:
-      case UNIX_ARCH_ARMV6B:
-      case UNIX_ARCH_ARMV5TEB:
-      case UNIX_ARCH_ARMV5TEL:
-         return FRONTEND_ARCH_ARM;
-      case UNIX_ARCH_X86_64:
-         return FRONTEND_ARCH_X86_64;
-      case UNIX_ARCH_X86:
+   if (string_is_equal(val, "aarch64"))
+      return FRONTEND_ARCH_ARMV8;
+   else if (
+         string_is_equal(val, "armv7l") ||
+         string_is_equal(val, "armv7b")
+      )
+      return FRONTEND_ARCH_ARMV7;
+   else if (
+         string_is_equal(val, "armv6l") ||
+         string_is_equal(val, "armv6b") ||
+         string_is_equal(val, "armv5tel") ||
+         string_is_equal(val, "arm")
+      )
+      return FRONTEND_ARCH_ARM;
+   else if (string_is_equal(val, "x86_64"))
+      return FRONTEND_ARCH_X86_64;
+   else if (string_is_equal(val, "x86"))
          return FRONTEND_ARCH_X86;
-      case UNIX_ARCH_ARM:
-         return FRONTEND_ARCH_ARM;
-      case UNIX_ARCH_PPC64:
+   else if (string_is_equal(val, "ppc64"))
          return FRONTEND_ARCH_PPC;
-      case UNIX_ARCH_MIPS:
+   else if (string_is_equal(val, "mips"))
          return FRONTEND_ARCH_MIPS;
-      case UNIX_ARCH_TILE:
+   else if (string_is_equal(val, "tile"))
          return FRONTEND_ARCH_TILE;
-   }
 
    return FRONTEND_ARCH_NONE;
 }
@@ -2405,8 +2369,15 @@ static bool frontend_unix_check_for_path_changes(path_change_data_t *change_data
          {
             unsigned j;
 
-            /* A successful close does not guarantee that the data has been successfully saved to disk, as the kernel defers writes. It is not common for a file system to flush the buffers when the stream is closed.
-             * So we manually fsync() here to flush the data to disk, to make sure that the new data is immediately available when the file is re-read.
+            /* A successful close does not guarantee that the 
+             * data has been successfully saved to disk, 
+             * as the kernel defers writes. It is 
+             * not common for a file system to flush 
+             * the buffers when the stream is closed.
+             *
+             * So we manually fsync() here to flush the data 
+             * to disk, to make sure that the new data is 
+             * immediately available when the file is re-read.
              */
             for (j = 0; j < inotify_data->wd_list->count; j++)
             {
@@ -2414,7 +2385,7 @@ static bool frontend_unix_check_for_path_changes(path_change_data_t *change_data
                {
                   /* found the right file, now sync it */
                   const char *path = inotify_data->path_list->elems[j].data;
-                  FILE *fp = fopen_utf8(path, "rb");
+                  FILE         *fp = (FILE*)fopen_utf8(path, "rb");
 
                   RARCH_LOG("file change detected: %s\n", path);
 

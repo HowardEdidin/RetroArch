@@ -610,7 +610,7 @@ static INLINE void gl_set_shader_viewports(gl_t *gl)
    shader_info.idx        = 0;
    shader_info.set_active = true;
 
-   video_shader_driver_use(shader_info);
+   video_shader_driver_use(&shader_info);
 
    gl_set_viewport_wrapper(gl, width, height, false, true);
 
@@ -618,7 +618,7 @@ static INLINE void gl_set_shader_viewports(gl_t *gl)
    shader_info.idx        = 1;
    shader_info.set_active = true;
 
-   video_shader_driver_use(shader_info);
+   video_shader_driver_use(&shader_info);
    gl_set_viewport_wrapper(gl, width, height, false, true);
 }
 
@@ -747,7 +747,7 @@ static void gl_render_osd_background(
    float *verts            = (float*)malloc(2 * vertices_total * sizeof(float));
    settings_t *settings    = config_get_ptr();
    int msg_width           =
-      font_driver_get_message_width(NULL, msg, strlen(msg), 1.0f);
+      font_driver_get_message_width(NULL, msg, (unsigned)strlen(msg), 1.0f);
 
    /* shader driver expects vertex coords as 0..1 */
    float x                 = video_info->font_msg_pos_x;
@@ -829,7 +829,7 @@ static void gl_render_osd_background(
    uniform_param.result.f.v2       = colors[2];
    uniform_param.result.f.v3       = colors[3];
 
-   video_shader_driver_set_parameter(uniform_param);
+   video_shader_driver_set_parameter(&uniform_param);
 
    glDrawArrays(GL_TRIANGLES, 0, coords.vertices);
 
@@ -839,7 +839,7 @@ static void gl_render_osd_background(
    uniform_param.result.f.v2       = 0.0f;
    uniform_param.result.f.v3       = 0.0f;
 
-   video_shader_driver_set_parameter(uniform_param);
+   video_shader_driver_set_parameter(&uniform_param);
 
    free(dummy);
    free(verts);
@@ -853,7 +853,7 @@ static void gl_set_osd_msg(void *data,
       const char *msg,
       const void *params, void *font)
 {
-   font_driver_render_msg(video_info, font, msg, params);
+   font_driver_render_msg(video_info, font, msg, (const struct font_params *)params);
 }
 
 #if defined(HAVE_MENU)
@@ -1114,7 +1114,7 @@ static bool gl_frame(void *data, const void *frame,
    params.fbo_info      = NULL;
    params.fbo_info_cnt  = 0;
 
-   video_shader_driver_set_parameters(params);
+   video_shader_driver_set_parameters(&params);
 
    gl->coords.vertices  = 4;
    coords.handle_data   = NULL;
@@ -1143,6 +1143,24 @@ static bool gl_frame(void *data, const void *frame,
 
       if (gl->menu_texture)
          gl_draw_texture(gl, video_info);
+   }
+   else if (video_info->statistics_show)
+   {
+      struct font_params *osd_params = (struct font_params*)
+         &video_info->osd_stat_params;
+
+      if (osd_params)
+      {
+         font_driver_render_msg(video_info, NULL, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params);
+
+#if 0
+         osd_params->y               = 0.350f;
+         osd_params->scale           = 0.75f;
+         font_driver_render_msg(video_info, NULL, video_info->chat_text,
+               (const struct font_params*)&video_info->osd_stat_params);
+#endif
+      }
    }
 #endif
 
@@ -1669,12 +1687,9 @@ static void gl_begin_debug(gl_t *gl)
 extern gl_renderchain_driver_t gl2_renderchain;
 
 static const gl_renderchain_driver_t *renderchain_gl_drivers[] = {
-#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
    &gl2_renderchain,
-#endif
    NULL
 };
-
 
 static bool renderchain_gl_init_first(
       const gl_renderchain_driver_t **renderchain_driver,
@@ -1697,7 +1712,8 @@ static bool renderchain_gl_init_first(
    return false;
 }
 
-static void *gl_init(const video_info_t *video, const input_driver_t **input, void **input_data)
+static void *gl_init(const video_info_t *video,
+      const input_driver_t **input, void **input_data)
 {
    gfx_ctx_mode_t mode;
    gfx_ctx_input_t inp;
@@ -2568,6 +2584,14 @@ static void gl_set_coords(void *handle_data, void *shader_data,
             shader_data, coords);
 }
 
+static float gl_get_refresh_rate(void *data)
+{
+   float refresh_rate = 0.0f;
+   if (video_context_driver_get_refresh_rate(&refresh_rate))
+      return refresh_rate;
+   return 0.0f;
+}
+
 static void gl_set_mvp(void *data, void *shader_data,
       const void *mat_data)
 {
@@ -2577,12 +2601,25 @@ static void gl_set_mvp(void *data, void *shader_data,
             shader_data, mat_data);
 }
 
+static uint32_t gl_get_flags(void *data)
+{
+   uint32_t             flags = 0;
+
+   BIT32_SET(flags, GFX_CTX_FLAGS_HARD_SYNC);
+   BIT32_SET(flags, GFX_CTX_FLAGS_BLACK_FRAME_INSERTION);
+   BIT32_SET(flags, GFX_CTX_FLAGS_MENU_FRAME_FILTERING);
+
+   return flags;
+}
+
 static const video_poke_interface_t gl_poke_interface = {
+   gl_get_flags,
    gl_set_coords,
    gl_set_mvp,
    gl_load_texture,
    gl_unload_texture,
    gl_set_video_mode,
+   gl_get_refresh_rate,
    NULL,
    gl_get_video_output_size,
    gl_get_video_output_prev,

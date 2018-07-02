@@ -30,8 +30,8 @@
 #endif
 
 #include "glslang_util.h"
-#if defined(HAVE_GLSLANG) && !defined(HAVE_GRIFFIN)
-#include "glslang.hpp"
+#if defined(HAVE_GLSLANG)
+#include <glslang.hpp>
 #endif
 #include "../../verbosity.h"
 
@@ -44,7 +44,7 @@ bool glslang_read_shader_file(const char *path, vector<string> *output, bool roo
    char tmp[PATH_MAX_LENGTH];
    char                          *ptr = NULL;
    char                          *buf = nullptr;
-   ssize_t                        len = 0;
+   int64_t                        len = 0;
    const char *basename               = path_basename(path);
 
    include_path[0] = tmp[0] = '\0';
@@ -369,7 +369,7 @@ bool glslang_parse_meta(const vector<string> &lines, glslang_meta *meta)
 }
 
 
-#if defined(HAVE_GLSLANG) && !defined(HAVE_GRIFFIN)
+#if defined(HAVE_GLSLANG)
 bool glslang_compile_shader(const char *shader_path, glslang_output *output)
 {
    vector<string> lines;

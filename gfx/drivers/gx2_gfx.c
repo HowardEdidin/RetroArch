@@ -1342,6 +1342,17 @@ static bool wiiu_gfx_frame(void *data, const void *frame,
 
    if (wiiu->menu.enable)
       menu_driver_frame(video_info);
+   else if (video_info->statistics_show)
+   {
+      struct font_params *osd_params = (struct font_params*)
+         &video_info->osd_stat_params;
+
+      if (osd_params)
+      {
+         font_driver_render_msg(video_info, NULL, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params);
+      }
+   }
 
    if (msg)
       font_driver_render_msg(video_info, NULL, msg, NULL);
@@ -1700,13 +1711,14 @@ static void wiiu_gfx_set_osd_msg(void *data,
 
 }
 
-static const video_poke_interface_t wiiu_poke_interface =
-{
+static const video_poke_interface_t wiiu_poke_interface = {
+   NULL, /* get_flags */
    NULL,                      /* set_coords */
    NULL,                      /* set_mvp */
    wiiu_gfx_load_texture,
    wiiu_gfx_unload_texture,
    NULL, /* set_video_mode */
+   NULL, /* get_refresh_rate */
    wiiu_gfx_set_filtering,
    NULL, /* get_video_output_size */
    NULL, /* get_video_output_prev */

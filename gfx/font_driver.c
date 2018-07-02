@@ -82,35 +82,67 @@ int font_renderer_create_default(const void **data, void **handle,
    return 0;
 }
 
-#ifdef HAVE_D3D
-static const font_renderer_t *d3d_font_backends[] = {
-#if defined(_XBOX360)
-   &d3d_xbox360_font,
-#elif defined(_WIN32) && defined(HAVE_D3DX)
-   &d3d_win32_font,
-#elif defined(_XBOX1)
+#ifdef HAVE_D3D8
+static const font_renderer_t *d3d8_font_backends[] = {
+#if defined(_XBOX1)
    &d3d_xdk1_font,
 #endif
    NULL
 };
 
-static bool d3d_font_init_first(
+static bool d3d8_font_init_first(
       const void **font_driver, void **font_handle,
       void *video_data, const char *font_path,
       float font_size, bool is_threaded)
 {
    unsigned i;
 
-   for (i = 0; i < ARRAY_SIZE(d3d_font_backends); i++)
+   for (i = 0; i < ARRAY_SIZE(d3d8_font_backends); i++)
    {
-      void *data = d3d_font_backends[i] ? d3d_font_backends[i]->init(
+      void *data = d3d8_font_backends[i] ? d3d8_font_backends[i]->init(
             video_data, font_path, font_size,
             is_threaded) : NULL;
 
       if (!data)
          continue;
 
-      *font_driver = d3d_font_backends[i];
+      *font_driver = d3d8_font_backends[i];
+      *font_handle = data;
+
+      return true;
+   }
+
+   return false;
+}
+#endif
+
+#ifdef HAVE_D3D9
+static const font_renderer_t *d3d9_font_backends[] = {
+#if defined(_XBOX)
+   &d3d_xbox360_font,
+#elif defined(_WIN32) && defined(HAVE_D3DX)
+   &d3d_win32_font,
+#endif
+   NULL
+};
+
+static bool d3d9_font_init_first(
+      const void **font_driver, void **font_handle,
+      void *video_data, const char *font_path,
+      float font_size, bool is_threaded)
+{
+   unsigned i;
+
+   for (i = 0; i < ARRAY_SIZE(d3d9_font_backends); i++)
+   {
+      void *data = d3d9_font_backends[i] ? d3d9_font_backends[i]->init(
+            video_data, font_path, font_size,
+            is_threaded) : NULL;
+
+      if (!data)
+         continue;
+
+      *font_driver = d3d9_font_backends[i];
       *font_handle = data;
 
       return true;
@@ -270,6 +302,37 @@ static bool vulkan_font_init_first(
          continue;
 
       *font_driver = vulkan_font_backends[i];
+      *font_handle = data;
+      return true;
+   }
+
+   return false;
+}
+#endif
+
+#ifdef HAVE_D3D10
+static const font_renderer_t *d3d10_font_backends[] = {
+   &d3d10_font,
+   NULL,
+};
+
+static bool d3d10_font_init_first(
+      const void **font_driver, void **font_handle,
+      void *video_data, const char *font_path,
+      float font_size, bool is_threaded)
+{
+   unsigned i;
+
+   for (i = 0; d3d10_font_backends[i]; i++)
+   {
+      void *data = d3d10_font_backends[i]->init(video_data,
+            font_path, font_size,
+            is_threaded);
+
+      if (!data)
+         continue;
+
+      *font_driver = d3d10_font_backends[i];
       *font_handle = data;
       return true;
    }
@@ -441,11 +504,6 @@ static bool font_init_first(
 
    switch (api)
    {
-#ifdef HAVE_D3D
-      case FONT_DRIVER_RENDER_DIRECT3D_API:
-         return d3d_font_init_first(font_driver, font_handle,
-               video_data, font_path, font_size, is_threaded);
-#endif
 #ifdef HAVE_OPENGL
       case FONT_DRIVER_RENDER_OPENGL_API:
          return gl_font_init_first(font_driver, font_handle,
@@ -454,6 +512,21 @@ static bool font_init_first(
 #ifdef HAVE_VULKAN
       case FONT_DRIVER_RENDER_VULKAN_API:
          return vulkan_font_init_first(font_driver, font_handle,
+               video_data, font_path, font_size, is_threaded);
+#endif
+#ifdef HAVE_D3D8
+      case FONT_DRIVER_RENDER_D3D8_API:
+         return d3d8_font_init_first(font_driver, font_handle,
+               video_data, font_path, font_size, is_threaded);
+#endif
+#ifdef HAVE_D3D9
+      case FONT_DRIVER_RENDER_D3D9_API:
+         return d3d9_font_init_first(font_driver, font_handle,
+               video_data, font_path, font_size, is_threaded);
+#endif
+#ifdef HAVE_D3D10
+      case FONT_DRIVER_RENDER_D3D10_API:
+         return d3d10_font_init_first(font_driver, font_handle,
                video_data, font_path, font_size, is_threaded);
 #endif
 #ifdef HAVE_D3D11
@@ -656,10 +729,10 @@ static INLINE unsigned font_get_replacement(const char* src, const char* start)
 static char* font_driver_reshape_msg(const char* msg)
 {
    /* worst case transformations are 2 bytes to 4 bytes */
-   char*       buffer  = (char*)malloc((strlen(msg) * 2) + 1);
-   const char* src     = msg;
-   char*       dst     = buffer;
-   bool        reverse = false;
+   unsigned char*       buffer  = (unsigned char*)malloc((strlen(msg) * 2) + 1);
+   const unsigned char* src     = (const unsigned char*)msg;
+   unsigned char*       dst     = (unsigned char*)buffer;
+   bool                 reverse = false;
 
    while (*src || reverse)
    {
@@ -671,7 +744,7 @@ static char* font_driver_reshape_msg(const char* msg)
 
          if (IS_RTL(src) || IS_DIR_NEUTRAL(src))
          {
-            unsigned replacement = font_get_replacement(src, msg);
+            unsigned replacement = font_get_replacement((const char*)src, msg);
             if (replacement)
             {
                if (replacement < 0x80)
@@ -733,25 +806,31 @@ static char* font_driver_reshape_msg(const char* msg)
 
    *dst = '\0';
 
-   return buffer;
+   return (char*)buffer;
 }
 #endif
 
 void font_driver_render_msg(
       video_frame_info_t *video_info,
       void *font_data,
-      const char *msg, const void *params)
+      const char *msg,
+      const struct font_params *params)
 {
-   font_data_t *font = (font_data_t*)(font_data ? font_data : video_font_driver);
+   font_data_t *font = (font_data_t*)(font_data 
+         ? font_data : video_font_driver);
 
    if (msg && *msg && font && font->renderer && font->renderer->render_msg)
    {
 #ifdef HAVE_LANGEXTRA
-      char* new_msg = font_driver_reshape_msg(msg);
-      font->renderer->render_msg(video_info, font->renderer_data, new_msg, params);
-      free(new_msg);
+      char *new_msg = font_driver_reshape_msg(msg);
 #else
-      font->renderer->render_msg(video_info, font->renderer_data, msg, params);
+      char *new_msg = msg;
+#endif
+
+      font->renderer->render_msg(video_info,
+            font->renderer_data, new_msg, params);
+#ifdef HAVE_LANGEXTRA
+      free(new_msg);
 #endif
    }
 }

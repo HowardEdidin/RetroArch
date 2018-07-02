@@ -201,8 +201,7 @@ static void vulkan_init_pipeline_layout(
          &layout_info, NULL, &vk->pipelines.layout);
 }
 
-static void vulkan_init_pipelines(
-      vk_t *vk)
+static void vulkan_init_pipelines(vk_t *vk)
 {
    static const uint32_t alpha_blend_vert[] =
 #include "vulkan_shaders/alpha_blend.vert.inc"
@@ -834,7 +833,11 @@ static bool vulkan_init_filter_chain(vk_t *vk)
 
 static void vulkan_init_resources(vk_t *vk)
 {
+   if (!vk)
+      return;
+
    vk->num_swapchain_images = vk->context->num_swapchain_images;
+
    vulkan_init_framebuffers(vk);
    vulkan_init_pipelines(vk);
    vulkan_init_descriptor_pool(vk);
@@ -922,7 +925,13 @@ static void vulkan_free(void *data)
 
    if (vk->context && vk->context->device)
    {
+#ifdef HAVE_THREADS
+      slock_lock(vk->context->queue_lock);
+#endif
       vkQueueWaitIdle(vk->context->queue);
+#ifdef HAVE_THREADS
+      slock_unlock(vk->context->queue_lock);
+#endif
       vulkan_deinit_resources(vk);
 
       /* No need to init this since textures are create on-demand. */
@@ -1225,7 +1234,13 @@ static void vulkan_check_swapchain(vk_t *vk)
 {
    if (vk->context->invalid_swapchain)
    {
+#ifdef HAVE_THREADS
+      slock_lock(vk->context->queue_lock);
+#endif
       vkQueueWaitIdle(vk->context->queue);
+#ifdef HAVE_THREADS
+      slock_unlock(vk->context->queue_lock);
+#endif
 
       vulkan_deinit_resources(vk);
       vulkan_init_resources(vk);
@@ -1829,6 +1844,17 @@ static bool vulkan_frame(void *data, const void *frame,
             vulkan_draw_quad(vk, &quad);
          }
       }
+      else if (video_info->statistics_show)
+      {
+         struct font_params *osd_params = (struct font_params*)
+            &video_info->osd_stat_params;
+
+         if (osd_params)
+         {
+            font_driver_render_msg(video_info, NULL, video_info->stat_text,
+                  (const struct font_params*)&video_info->osd_stat_params);
+         }
+      }
 #endif
 
       if (msg)
@@ -2196,7 +2222,7 @@ static void vulkan_set_osd_msg(void *data,
       const char *msg,
       const void *params, void *font)
 {
-   font_driver_render_msg(video_info, font, msg, params);
+   font_driver_render_msg(video_info, font, msg, (const struct font_params *)params);
 }
 
 static uintptr_t vulkan_load_texture(void *video_data, void *data,
@@ -2254,18 +2280,46 @@ static void vulkan_unload_texture(void *data, uintptr_t handle)
 
    /* TODO: We really want to defer this deletion instead,
     * but this will do for now. */
+#ifdef HAVE_THREADS
+   slock_lock(vk->context->queue_lock);
+#endif
    vkQueueWaitIdle(vk->context->queue);
+#ifdef HAVE_THREADS
+   slock_unlock(vk->context->queue_lock);
+#endif
    vulkan_destroy_texture(
          vk->context->device, texture);
    free(texture);
 }
 
+static float vulkan_get_refresh_rate(void *data)
+{
+   float refresh_rate;
+
+   if (video_context_driver_get_refresh_rate(&refresh_rate))
+       return refresh_rate;
+
+   return 0.0f;
+}
+
+static uint32_t vulkan_get_flags(void *data)
+{
+   uint32_t             flags = 0;
+
+   BIT32_SET(flags, GFX_CTX_FLAGS_CUSTOMIZABLE_SWAPCHAIN_IMAGES);
+   BIT32_SET(flags, GFX_CTX_FLAGS_BLACK_FRAME_INSERTION);
+
+   return flags;
+}
+
 static const video_poke_interface_t vulkan_poke_interface = {
+   vulkan_get_flags,
    NULL,                   /* set_coords */
    NULL,                   /* set_mvp */
    vulkan_load_texture,
    vulkan_unload_texture,
    vulkan_set_video_mode,
+   vulkan_get_refresh_rate, /* get_refresh_rate */
    NULL,
    NULL,
    NULL,
@@ -2351,7 +2405,13 @@ static bool vulkan_read_viewport(void *data, uint8_t *buffer, bool is_idle)
       if (!is_idle)
          video_driver_cached_frame();
 
+#ifdef HAVE_THREADS
+      slock_lock(vk->context->queue_lock);
+#endif
       vkQueueWaitIdle(vk->context->queue);
+#ifdef HAVE_THREADS
+      slock_unlock(vk->context->queue_lock);
+#endif
 
       if (!staging->mapped)
          vulkan_map_persistent_texture(
